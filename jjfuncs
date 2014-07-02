@@ -1,0 +1,132 @@
+
+CFLAGS {-g -I../imports -I../src -I../build} #set
+
+t2c {SOURCES OUTPUTS} {
+	SRC #local
+	SRC $HERE $SOURCES #strcat
+	{ triggers $SRC
+          sources $SRC
+          outputs $OUTPUTS
+          action { t2c $sources }
+          message { Text2Code $SOURCES }
+	} #command
+} #function
+
+compile {SOURCE HEADERS FLAGS} {
+	OBJECT #local
+	OBJECT  $SOURCE .o #replace_suffix
+	SRC #local
+	SRC $HERE $SOURCE #strcat
+
+	{ triggers { $SRC $HEADERS }
+	   sources $SRC
+	   outputs $OBJECT
+	   flags $FLAGS
+	   action { gcc -g -o $OBJECT -c $SRC $flags $CFLAGS }
+	   message { Compiling $SOURCE [source] }
+	} #command
+} #function
+
+compile.c++ {SOURCE HEADERS FLAGS} {
+	OBJECT #local
+	OBJECT  $SOURCE .o #replace_suffix
+	SRC #local
+	SRC $HERE $SOURCE #strcat
+
+	{ triggers { $SRC $HEADERS }
+	   sources $SRC
+	   outputs $OBJECT
+	   flags $FLAGS
+	   action { g++ -g -o $OBJECT -c $SRC $flags $CFLAGS }
+	   message { Compiling $SOURCE [source] }
+	} #command
+} #function
+
+
+
+gcompile {SOURCE HEADERS FLAGS} {
+	OBJECT #local
+	OBJECT  $SOURCE .o #replace_suffix
+	{ triggers { $SOURCE $HEADERS }
+	   outputs $OBJECT
+	   flags $FLAGS
+	   action { gcc -g -o $OBJECT -c $SOURCE $flags $CFLAGS }
+	   message { Compiling $SOURCE [generated] }
+	} #command
+} #function
+
+
+gcompile.c++ {SOURCE HEADERS FLAGS} {
+	OBJECT #local
+	OBJECT $SOURCE .o #replace_suffix
+	{ triggers { $SOURCE $HEADERS }
+	   outputs $OBJECT
+	   flags $FLAGS
+	   action { g++ -g -o $OBJECT -c $SOURCE $flags $CFLAGS }
+	   message { Compiling $SOURCE [generated] }
+	} #command
+} #function
+
+
+link {TARGET OBJECTS FLAGS} {
+	{ triggers $OBJECTS
+             inputs $OBJECTS
+	   outputs $TARGET
+	   flags $FLAGS 
+	   action { gcc -g -o $outputs $inputs $flags $LFLAGS }
+	   message { Linking $outputs }
+	} #command
+} #function
+
+link.c++ {TARGET OBJECTS FLAGS} {
+	{ triggers $OBJECTS inputs $OBJECTS
+	   outputs $TARGET flags $FLAGS 
+	   action { g++ -g -o $outputs $inputs $flags $LFLAGS }
+	   message { Linking $outputs }
+	} #command
+} #function
+
+imported {SRC HDR} {
+  OBJ $SRC .o #replace_suffix
+  INP ../imports/ $SRC #strcat
+  HINP ../imports/ $HDR #strcat
+  { triggers { $INP $HINP }
+    source   { $INP  }
+    outputs  { $OBJ  }
+    flags { }
+    action { gcc $CFLAGS $flags -c $source }
+    message { Compiling $SRC [imported] }
+  } #command
+} #function
+
+fxform {SRC OUT}
+{
+  SOURCE $HERE $SRC #strcat
+  {
+    triggers $SOURCE
+    outputs $OUT
+    action { fxform $SOURCE }
+    message { fxform $SRC }
+  } #command
+} #function
+
+gencon {SRC OUT}
+{
+  SOURCE $HERE $SRC #strcat
+  {
+    triggers $SOURCE
+    outputs $OUT
+    action { gencon $SOURCE }
+    message { gencon $SRC }
+  } #command
+} #function
+
+add.foxcflags {OUT} { $OUT { +flags $FOX_CFLAGS } #modify } #function
+
+depends.here {TARGET DEP} 
+{
+   TRI $HERE $DEP #strcat
+   $TARGET { +triggers $TRI } #modify
+} #function
+
+

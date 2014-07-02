@@ -1,0 +1,56 @@
+version 1
+file critbit.h
+file critbit.c
+file test_crit.c
+file critbit.u
+descr      Implements a critbit-tree based map. 
+help
+
+A critbit tree is a compressed binary radix tree. It looks just like a 
+regular binary radix tree based on individual bits in the string keys.
+However, nodes with only one child are omitted. This makes it possible
+to do the minimum number of comparisions and memory accesses for a given
+set and a key. I had learned about the algorithm on the Internet but I
+don't honestly remember all the details right now. The nodes somehow
+record the critical bit which is the diversion point between the left
+and right subtrees (or bit=0 or bit=1 subtrees). See the file critbit.u
+for more details.
+
+Anyway, here are the functions and the mostly opaque type:
+
+typedef struct { void *root; } strmap_t;
+
+   This is the type we will be using for our maps. This specification
+   is complete, you can calloc() etc. with this size if you need to. 
+
+strmap_t *strmap_new();
+
+   Creates a new map. If you'd like to allocate the map object yourself,
+   simply using calloc or setting the root field to NULL will be sufficient.
+
+void *strmap_find(strmap_t *map, char *key);
+
+   Finds the key in the map and returns the data pointer associated with it.
+   Note that keys and data are stored separately. The returned data pointer
+   doesn't necessarily include the key value. If the search fails, this
+   function returns NULL. Make sure to never store NULL data pointers in
+   these data structures, it will fail badly.
+
+void *strmap_insert(strmap_t *map, char *key,void *data);
+
+   Inserts the given key,data pair into the map. It returns NULL on 
+   successful completion. If the given key is already in the map, then
+   the insertion fails and the data pointer associated with the key is
+   returned.
+
+void *strmap_remove(strmap_t *map, char *key);
+
+   Removes the given key from the map and returns the data pointer
+   associated with it. If the key is not in the map, return value is NULL.
+
+void *strmap_destroy(strmap_t *map);
+
+   Removes one element from the map and returns the associated data pointer.
+   Returns NULL if the map is empty. If this is the case and you want to
+   get rid of the map, you can simply free() it.
+

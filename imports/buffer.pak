@@ -1,0 +1,35 @@
+version 1
+file buffer.h
+file buffer.c
+descr      Provides a simple buffer. You can write to it incrementally and
+descr      then retrieve the whole sequence in one go.
+help
+
+This library defines the following functions:
+
+buffer_t *buffer_new(size_t blksize);
+    
+void buffer_free(buffer_t *B, void **Rd, size_t *Rl);
+
+    Frees the buffer and collects its contents in Rd an Rl. Rd
+    and Rl are optional as in collect() below.
+    
+void buffer_collect(buffer_t *B, void **Rd, size_t *Rl);
+
+    Collects the contents of the buffer into Rd and Rl. If Rd is
+    NULL, no array is created, only the number of bytes is returned in
+    Rl. If Rl is NULL, then a count isn't returned, only the array.
+    If both are NULL, this is a nop.
+
+void buffer_write(buffer_t *B, void *d, size_t l);
+   
+    Writes some bytes to the buffer.
+
+The library can also be made part of another module by amalgamation.
+If you 
+
+#define _BUFFER_PROTO static
+
+before including "buffer.c", then all functions in the module become
+static and won't collide with other modules.
+

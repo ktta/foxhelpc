@@ -1,0 +1,524 @@
++. 
+A critbit tree is a compressed radix tree. Normally, a radix tree has internal
+nodes with a single child. This technique eliminates those by counting 
+how many nodes in sequence have a single child and eliminating them by
+storing the count.
+
+Anyway, this file is adapted from Adam Langley's code at
+
+  http://github.com/agl/critbit
+
+The tree is represented as a struct with a single field: the root.
+
++ critbit Header
+
+#ifndef CRITBIT_TYPE_DEFINED
+#define CRITBIT_TYPE_DEFINED
+
+typedef struct {
+  void *root;
+} strmap_t;
+
+#endif
++.
+Our first function is the creation function
+
++ critbit Header
+SCOPE strmap_t  *strmap_new();
+
++ critbit Code
+
+SCOPE strmap_t  *strmap_new()
+{
+  strmap_t *s;
+  s= malloc(sizeof(*s));
+  s->root= 0;
+  return s;
+}
+
++.
+There are two kinds of nodes: internal and leaf. For internal nodes,
+the child pointers contain the left and right children. For leaf
+nodes, child[0] points to the key string and child[1] points to the 
+data associated with it.
+
++ critbit Internal Code
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+
+typedef struct
+{
+  void* child[2];
+  unsigned internal:1, byte:23, mask:8;
+} strmap_node_t;
++.
+The byte and mask fields make sense only for internal nodes. These together
+encode at which bit the two children diverge (the critical bit). The mask
+encodes the bit within the byte in a way optimized for quick access. All
+bits in it are 1 except for the intended bit. i.e. if two children of a
+node diverge at bit 121, then the byte field of the internal node will
+be 15 and the mask field will 0b11111101.
+
+This mask is used to quickly determine whether a given key falls to the
+left side of a node or the right side of it. child[0] is the left child,
+which represent values with their critical bit 0. child[1] is the right
+child which represent values with their critical bit 1.
+
+We use the following formula to get a 0 or 1.
+
+  (1+(keybyte | mask))>>8
+
+If the critical bit in keybyte is set, the OR operation will result in
+0xff. Adding 1 will result in 0x100 and right shift by 8 will give us
+1. If it's not set, then the result of OR will be the same as mask
+and adding 1 will result in a value less than 0xff. Shifting this 8
+times to right will give us 0.
+
+When we're doing this, we assume that the key is padded to infinity
+on the right with null bytes.
+
++ critbit Internal Code
+
+static inline int strmap_dir
+    (uint8_t *key,uint32_t len_key,strmap_node_t *node)
+{
+  uint8_t c;
+
+  if (node->byte<len_key) c= key[node->byte];
+                     else c= 0;
+  return (1+(node->mask|c))>>8;
+}
+
++.
+So, finding a given key in the map consists of walking down the internal
+nodes and then comparing the resulting leaf node to the key. Note that
+this comparision is mandatory because when we were walking down, we
+only checked the critical bits of the key. We still don't know about
+the unchecked bits.
+
++ critbit Header
+SCOPE void* strmap_find(strmap_t *map,char *skey);
+
++ critbit Code
+
+SCOPE void* strmap_find(strmap_t *map,char *skey)
+{
+  uint8_t *key; unsigned int len_key;
+  strmap_node_t *node;
+
+  node= map->root;
+  if (!node) return 0;
+
+  key= (void*) skey;
+  len_key= strlen(skey);
+
+  while(node->internal)
+     node= node->child[strmap_dir(key,len_key,node)];
+
+  if (strcmp(skey, node->child[0])) return 0;
+                               else return node->child[1];
+}
++.
+Now we shall do insertion. First let's talk a little more about how the
+nodes are organized.
+
+When doing insertion, we make sure that internal nodes have increasing
+critical bit numbers as we go down the tree. i.e. if the root node has
+critical bit 3, then we are sure that its children have a critical bit 
+greater than 3.
+
+This has a consequence: all leaf nodes in a subtree share a common prefix.
+The proof of this is quite lengthy so I'll skip it here. In any case, 
+our insertion routine is as follows:
+
+  - find the leaf node which diverges from the key at the leftmost bit
+    position. That position is the critical bit for the new parent of
+    the key-leaf-node.
+  - choose the internal node which has the leftmost critical bit among
+    the internal nodes whose critical bit is greater than the critical
+    bit of the key. i.e. the one closest to the key's critical bit.
+  - put the found internal node and the key leaf node as the children
+    of the newly created internal node, adjusting the link of the parent.
+
+When considering keys, we read them from left to right, and from high
+bit to low bit. So our bitstream looks like this:
+
+  byte0-bit7 byte0-bit6 .. byte0-bit0 byte1-bit7 byte1-bit6 .. byte1-bit0 ..
+
+Ordering bits this way gives us a tree that has the strings in it 
+sorted in conventional strcmp() order. Now this has a consequence, if node
+N has a greater critbit than node M, then N->mask > M->mask. Within a
+byte, a greater critbit corresponds to a lower bit. For example, 
+critbit 0 is bit 7 whereas critbit 5 is bit2, due to the ordering we
+mentioned above.
+
+So, the mask corresponding to critbit0 is ~(1<<7) and critbit5 is ~(1<<5)
+obviously mask(critbit5) > mask(critbit0) since
+
+    ~(1<<5) =  255 - (1<<5)
+    ~(1<<7) =  255 - (1<<7)
+
+  255 - (1<<5) > 255 - (1<<7)
+      - (1<<5) > - (1<<7)
+        (1<<5) < (1<<7)
+
+which is correct.
+
++ critbit Header
+
+SCOPE void* strmap_insert(strmap_t* map, char* skey, void *data);
+
++ critbit Code
+
+SCOPE void* strmap_insert(strmap_t* map, char* skey, void *data)
+{
+  uint8_t *key; uint32_t len_key;
+  strmap_node_t *node_elt;
+
+  key= (void*) skey;
+
+  if (!map->root)
+  {
+     map->root= strmap_leaf_node(key,data);
+     return 0;
+  }
+
+  len_key= strlen(skey);
+
+  node_elt= map->root;
+  while(node_elt->internal)
+    node_elt= node_elt->child[strmap_dir(key,len_key,node_elt)];
+
+  uint32_t crit_byte;
+  uint8_t  mask;
+  uint8_t  *elt;
+  int dir_elt;
+  strmap_node_t *node_key;
+
+  elt= node_elt->child[0];
+
+  for(crit_byte=0;
+      crit_byte<=len_key && elt[crit_byte]==key[crit_byte];
+      crit_byte++)
+          ;
+
+  if (elt[crit_byte]==key[crit_byte]) return node_elt->child[1];
+
+  mask= strmap_make_mask(elt[crit_byte],key[crit_byte]);
+
+  dir_elt= (1+(mask|elt[crit_byte]))>>8;
+
+  node_key= strmap_internal_node(crit_byte,mask);
+  node_key->child[1-dir_elt]= strmap_leaf_node(key,data);
+
+  strmap_node_t *parent;
+  strmap_node_t *node;
+
+  parent= 0;
+  node= map->root;
+
+  while(node->internal)
+  {
+     if (node->byte > crit_byte) break;
+                               /* see the above discussion for the
+                                  reason for this inequality's direction */
+     if (node->byte==crit_byte && node->mask > mask) break;
+     parent= node;
+     node= node->child[strmap_dir(key,len_key,node)];
+  }
+
+  node_key->child[dir_elt]= node;
+  if (parent) { if (parent->child[0]==node) parent->child[0]= node_key;
+                                    else    parent->child[1]= node_key; }
+  else map->root= node_key;
+  return 0;
+}
++.
+Here we used a couple of internal functions. The first one calculates the
+leading bit which is different in A and B. It then proceeds to make a mask
+out of it, by inverting it.
+
++ critbit Internal Code
+
+static inline uint32_t strmap_make_mask
+    (uint32_t A, uint32_t B)
+{
+  uint8_t diff;
+  diff= A ^ B;
+  diff|= diff>>1;
+  diff|= diff>>2;
+  diff|= diff>>4;
+  return (diff&~(diff>>1))^255;
+}
++.
+Here the diff byte corresponds to the bits different in A and B.
+We want to find the leftmost set bit in diff. If diff is:
+
+  abcdefgh
+
+then the first OR makes it into
+
+  a b c d e f g h
+|   a b c d e f g h
+---------------------
+  a(a|b)(b|c)(c|d)(d|e)(e|f)(f|g)(g|h)
+
+the second one makes it
+
+  a (a|b) (b|c) (c|d) (d|e) (e|f) (f|g) (g|h)
+|          a    (a|b) (b|c) (c|d) (d|e) (e|f)
+----------------------------------------------
+  a  ab  abc   abcd  bcde  cdef  defg  efgh
+
+The third one
+
+  a  ab  abc   abcd  bcde  cdef  defg  efgh
+|                    a     ab    abc   abcd
+-------------------------------------------
+  a ab  abc  abcd  abcde abcdef abcdefg abcdefgh
+
+As you can see, proceeding from left to right, if any bit is one, then
+the rest of the bits also become one. So now we have a byte in the form:
+
+  0..0 1....1
+   N     M
+We want to make it into
+
+  0..0 1 0..0
+   N      M-1
+
+This can be accomplished by shifting the byte once and inverting it.
+
+  0..0 1..1           0..0 1..1           1..1 0..0       1..1 1 0..0
+   N    M      shift  N+1  M-1   invert   N+1  M-1   also  N     M-1
+
+if we mask the last value by the original value, we will get rid of the
+leading N bits.
+
+    N      M-1
+   1..1 1 0..0
+&  0..0 1 1..1
+-------------
+   0..0 1 0..0
+
+Then inverting this will give us the mask we wanted. Anyway, the following
+is pretty straightforward, we just make some nodes.
+
++ critbit Internal Code
+
+static inline strmap_node_t* strmap_leaf_node
+    (uint8_t *key, void *data)
+{
+  strmap_node_t *N;
+  N= malloc(sizeof(*N));
+  N->internal= 0;
+  N->child[0]= key;
+  N->child[1]= data;
+  return N;
+}
+
+static inline strmap_node_t* strmap_internal_node
+    (uint32_t byte, uint32_t mask)
+{
+  strmap_node_t *N;
+  N= malloc(sizeof(*N));
+  N->internal= 1;
+  N->byte= byte;
+  N->mask= mask;
+  return N;
+}
++.
+Removal isn't as complicated as insertion. Whenever we remove a leaf node,
+we have to remove its parent as well. When doing so, we need to put
+the sibling of the removed leaf node as the new child of the grandparent
+node.
+
++ critbit Header
+SCOPE void *strmap_remove(strmap_t* map, char *skey);
+
++ critbit Code
+
+SCOPE void *strmap_remove(strmap_t* map, char *skey)
+{
+  uint8_t *key; uint32_t len_key;
+  void *retv;
+
+  if (!map->root) return 0;
+
+  key= (void*) skey;
+  len_key= strlen(skey);
+   
+  strmap_node_t *node;
+  strmap_node_t *sibling;
+  strmap_node_t *parent;
+  strmap_node_t *gparent;
+
+  node= map->root;
+  gparent= 0;
+  sibling= 0;
+  parent= 0;
+
+  while(node->internal)
+  {
+    int dir;
+    dir= strmap_dir(key, len_key, node);
+    gparent= parent;
+    parent= node;
+    sibling= node->child[1-dir];
+    node= node->child[dir];
+  }
+
+  if (strcmp(node->child[0],skey)) return 0;
+  retv= node->child[1];
+  free(node);
+
+  if (!gparent)
+  {
+     map->root= sibling;
+     if (parent) free(parent);
+     return retv;
+  }
+
+  if (gparent->child[0]==parent)
+    gparent->child[0]= sibling;
+  else
+    gparent->child[1]= sibling;
+
+  free(parent);
+
+  return retv;
+}
+
++.
+This is done differently in the original text, using double pointers and
+walking them carefully around. I think my approach is better because
+it's much more clearer. I don't care if it does more comparisions or not.
+
+The next function removes the least element from the tree. It's very
+similar to the remove function, it just doesn't use a key and walks towards
+left all the time.
+
++ critbit Header
+SCOPE void *strmap_destroy(strmap_t *map);
+
++ critbit Code
+
+SCOPE void *strmap_destroy(strmap_t *map)
+{
+  strmap_node_t *node;
+  strmap_node_t *parent;
+  strmap_node_t *gparent;
+  strmap_node_t *sibling;
+  void *retv;
+
+  if (!map->root) return 0;
+
+  parent= 0;
+  gparent= 0;
+  sibling= 0;
+  node= map->root;
+  while(node->internal)
+  {
+    gparent= parent;
+    parent= node;
+    sibling= node->child[1];
+    node= node->child[0];
+  }
+  retv= node->child[1];
+  free(node);
+  if (!gparent) 
+  {
+    map->root= sibling;
+    if (parent) free(parent);
+    return retv;
+  }
+  if (gparent->child[0]==parent)
+    gparent->child[0]= sibling;
+  else
+    gparent->child[1]= sibling;
+
+  free(parent);
+
+  return retv;
+}
++ critbit Header
+
+SCOPE int strmap_count(strmap_t *map);
+
++ critbit Code
+SCOPE int strmap_count(strmap_t *map)
+{
+  return map->root? strmap_count_subtree(map->root) : 0;
+}
+
++ critbit Internal Code
+
+static int strmap_count_subtree(strmap_node_t *node)
+{
+  int C= 0;
+  while(node->internal)
+  {
+      C+= strmap_count_subtree(node->child[0]);
+      node= node->child[1];
+  }
+  return C+1;
+}
+
++.
+I think that's it. I'd like to expand this later, with more explanation about
+the insertion algorithm but I don't have time for that right now. Let's write
+a little help about this:
+
++Help
+[[ strmap ]]
+
+This command imports strmap functions. A strmap is a critbit tree which
+maps strings to pointers. Being a map, it can only process unique keys.
+The syntax is:
+
+  import strmap as SCOPE;
+
+Where scope is 'private' or 'public'. The command creates the following
+types and functions.
+
+   typedef struct { void *root; } strmap_t;
+   strmap_t *strmap_new();
+   void* strmap_insert(strmap_t* map, char* key, void *data);
+   void* strmap_find(strmap_t *map,char *key);
+   void *strmap_remove(strmap_t* map, char *key);
+   void *strmap_destroy(strmap_t *map);
+
+The new() function allocates a strmap_t and initializes it by setting root 
+NULL. You don't have to use this, you can simply set the root field of your
+strmap_t object to NULL if you already have an allocated strmap_t.
+
+insert() function inserts the given data into the map, using key. The 
+return value is NULL on success. If there is already some data stored
+with the same key, then this fails and returns the previously stored
+pointer.
+
+find() will return the pointer associated with key and NULL if it can't
+find it.
+
+remove() will remove the pointer associated with key from the map and
+return that pointer. Returns NULL if key isn't in the map.
+
+destroy() will remove the pointer associtated with the least key in the
+map. It will return NULL if the map is empty. You can call this successively
+in order to destroy the tree completely:
+
+  while((data=strmap_destroy(map)))
+    { free(data); }
+  free(map);
+
+count() returns the number of elements in the tree. This can be useful
+for storing the stuff in an array maybe:
+
+  void **array= malloc(sizeof(void*)*(1+strmap_count(map)));
+  void **iter=array;
+  while((*(iter++)= strmap_destroy(map))) ;
+  free(map);
+
++.
+
