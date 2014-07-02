@@ -1,0 +1,69 @@
++.
+Looking up words is done thru a string map. I could use some sort of a tree
+for this, but that's too much work.
+
++ Private Types
+
+typedef struct { int n_val; char *str; int* val; } word_record_t;
+
+
++ Public Functions
+
+int lookup_word(int font, const char *str)
+{
+   word_record_t *V;
+   int *N;
+   int nv,i;
+   V= strmap_find(&word_list, (char*) str);
+   if (!V)
+   {
+     V= malloc(sizeof(*V));
+     V->str= strdup(str);
+     V->val= malloc(sizeof(int)*2);
+     strmap_insert(&word_list, strdup(str), V);
+     V->n_val= 2; V->val[0]= font; V->val[1]= ++last_word;
+     return V->val[1];
+   }
+   for(i=0;i<V->n_val;i+=2)
+     if (V->val[i]==font) return V->val[i+1];
+   nv= V->n_val;
+   N= malloc(sizeof(int)*(nv+2));
+   memcpy(N, V->val, nv*sizeof(int));
+   N[nv]= font;
+   N[nv+1]= ++last_word;
+   free(V->val);
+   V->val= N;
+   V->n_val+= 2;
+   return N[nv+1];
+}
+
++ Private Variables
+
+static strmap_t word_list;
+static int last_word;
+
++.
+Now, we need to create the word list. For this, I will simply create an
+array and assign to it as we destroy the word list.
+
++ Public Functions
+
+char **get_word_list()
+{
+   char **R;
+   word_record_t *W;  
+   int i;
+  
+   R= malloc((last_word+2)*sizeof(char*));
+   R[0]= "";
+   while((W=strmap_destroy(&word_list)))
+   {
+     for(i=0;i<W->n_val;i+=2)
+       R[W->val[i+1]]= W->str;
+     free(W->val); free(W);
+   }
+   R[last_word+1]= NULL;
+   return R;
+}
+
+

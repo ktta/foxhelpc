@@ -1,0 +1,83 @@
+> t-parse.c nolines
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <errno.h>
+#include "ifile.h"
+#include "buffer.h"
+#include "critbit.h"
+#include "pngdim.h"
+
+static const char *libhdr=
+<t2c.q
+#include <fx.h>
+#include <FXString.h>
+#include <FXApp.h>
+#include <FXScrollBar.h>
+#include <FXScrollArea.h>
+#include <FXImage.h>
+#include <FXDCWindow.h>
+#include <FXFont.h>
+#include <FXPNGImage.h>
+#include <FXMenuCommand.h>
+#include <FXTopWindow.h>
+
+#define CELL_PAD 5
+
+<
+;
+
+static const char *libcode=
+<t2c.q
+<cat ../src/menuco.cc ../src/canvas.cc ../src/helpwin.cc
+<
+<
+;
+
+: Public Types
+: Private Types
+<t2c.proto
+: Private Functions
+: Public Functions
+<
+: Private Variables
+: Private Functions
+: Public Functions
+
+
+int main(int argc,char **argv)
+{
+  parse_file(argv[1]);
+//  print_docnodelist(doc);
+  puts(libhdr); puts(libcode);
+
+  calculate_section_titles();
+  collect_anchors();
+  print_anchors();
+  
+  check_first_node();
+  get_chapter_menu();
+  printf(
+<t2c.q
+static void init_doc(FYHelpWin *win)
+{
+  %s
+  win->canvas->link_func= follow_link;
+}
+<
+,chapter_menu);
+
+  print_section_menu_arrays();
+  output_doc();
+  print_init_words();
+  print_link_table();
+puts(
+<t2c.q
+<cat ../src/iface.cc
+<
+<
+  );
+  return 0;
+}

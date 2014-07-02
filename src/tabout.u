@@ -1,0 +1,298 @@
++.
+Let's output the table stuff without lines or justification first.
+
++ Private Functions
+
+void output_table(int nrows,int ncols, int ncells, 
+                  cell_t *cells,docnode_t *ref)
+{
+  int i,j,N,K;
+  int *Estart, *Eend;
+  int s,sr, er;
+  coprint(" /// BEGIN TABLE \n {\n");
+
+  // define width and height
+  Estart= malloc(sizeof(int)*ncells);
+  Eend= malloc(sizeof(int)*ncells);
+
+  for(i=0;i<ncells;i++)
+  {
+    Estart[i]= seqlen;
+    output_seq(0, cells[i].seq,ref);
+    Eend[i]= seqlen-1;
+    coprint("  int cw%d, ch%d,ca%d;\n", i,i,i);
+    coprint("  canvas->get_seq_metrics(%d,%d, &cw%d, &ch%d, &ca%d);\n",
+                      Estart[i], Eend[i], i,i,i);
+  }
+
+  for(i=0;i<nrows;i++)
+    coprint(" int rh%d=0, ra%d=0;\n", i,i);
+
+  for(i=0;i<nrows;i++)
+    for(j=0;j<ncells;j++)
+      if (cells[j].row==i)
+         coprint("  rh%d= max_i(rh%d, ch%d); ra%d= max_i(ra%d, ca%d);\n",
+                       i, i, j, i, i, j );
+  for(i=0;i<ncols;i++) coprint("  int cow%d=0;\n", i);
+
+  for(i=0;i<ncols;i++) 
+    for(j=0;j<ncells;j++)
+       if (cells[j].colspan==1 && cells[j].col==i)
+          coprint("  cow%d= max_i(cow%d, cw%d);\n", i,i,j);
+  coprint("  int D=0;\n");
+  for(N=2;N<=ncols;N++)
+     for(j=0;j<ncells;j++)
+       if (cells[j].colspan==N)
+       {
+         coprint("  D= cw%d ", j);
+         for(i=0;i<cells[j].colspan;i++)
+            coprint(" - cow%d", i+cells[j].col);
+         coprint(";\n");
+         coprint("  if (D>0) { \n");
+         for(i=0;i<cells[j].colspan-1;i++)
+         {
+            int K= cells[j].colspan-i;
+            coprint("    cow%d += D / %d; D -= D / %d;\n",
+                      cells[j].col+i, K, K);
+         }
+         coprint("    cow%d += D; }\n", cells[j].col+i);
+       }
+  for(i=0;i<=nrows;i++) coprint("  int rp%d;\n", i);
+  for(i=0;i<=ncols;i++) coprint("  int cp%d;\n", i);
+  coprint("  cp0= rp0= 0;\n");
+  for(i=1;i<=nrows;i++) coprint("  rp%d= rp%d + 2*CELL_PAD + rh%d;\n",
+                                      i, i-1, i-1);
+  for(i=1;i<=ncols;i++) coprint("  cp%d= cp%d + 2*CELL_PAD + cow%d;\n",
+                                      i, i-1, i-1);
+
+  coprint("  int off_x= canvas->get_width() - cp%d;\n", ncols);
+  coprint("  if (off_x<0) off_x= 0; else off_x/= 2;\n");
+
+  for(i=0;i<ncells;i++)
+    coprint("  canvas->%s(off_x+cp%d+CELL_PAD, off_x+cp%d-CELL_PAD, "
+            "rp%d+CELL_PAD, rh%d, ra%d, %d, %d);\n",
+                       cell_just_func(cells[i].fmt),
+                                cells[i].col,
+                                       cells[i].col+cells[i].colspan,
+             cells[i].row,
+                   cells[i].row,
+                         cells[i].row,
+                               Estart[i],
+                                   Eend[i]);
+
+  coprint("  int off_y= canvas->get_cursor_y();\n");
+
+  table_draw_row_lines(nrows, ncols);
+  table_draw_col_lines(nrows, ncols, ncells, cells);
+  coprint("  canvas->xcoord(cp%d+3);\n", ncols);
+
+  coprint("  canvas->advance_y(rp%d+2);\n", nrows);
+  coprint(" /// END TABLE \n }\n");
+  free(Estart); free(Eend);
+}
+
+
+
+const char *cell_just_func(char *fmt)
+{
+  if (!fmt) return "cell_left";
+  if (strchr(fmt,'R')) return "cell_right";
+  if (strchr(fmt,'C')) return "cell_center";
+  return "cell_left";
+}
+
++.
+In order to draw the row and column lines, we need to:
+ - record how many there are
+ - initialize the corresponding array
+ - fill out the array during the layout process
+
++ Private Variables
+
+int n_table_row_lines, n_table_col_lines;
+
++ Page Init
+   n_table_row_lines= n_table_col_lines= 0;
+
++ Private Functions
+
+void print_table_coord_variables()
+{
+  if (n_table_row_lines)
+    printf("  int *TL_ROW= canvas->get_row_lines(%d);\n", n_table_row_lines);
+  else
+    printf(" canvas->get_row_lines(0); \n");
+  if (n_table_col_lines)
+    printf("  int *TL_COL= canvas->get_col_lines(%d);\n", n_table_col_lines);
+  else
+    printf(" canvas->get_col_lines(0); \n");
+}
+
++.
+I think a little bit of explanation is in order. I won't be able to figure
+all this out later. Let's start with the easy one: drawing the row lines
+for a table.
+
+While calculating positions for the cell elements, we compute the following
+pseudo-arrays: 
+
+ - RP-i : start-y position for row i. Row i occupies the space between
+          RP-i and RP-i+1 in the y axis.
+ - Rh-i : Height for the whole row
+ - Ra-i : Ascent for the whole row
+
+The latter two are calculated simply by looking at the row elements and
+extracting font heights and ascents from those elements.
+
+The space between RP-i and RP-i+1 is larger than Rh-i. This is because
+of padding. So:
+
+  RP-i+1 =  RP-i + Rh-i + 2*CELL_PAD
+
+When laying out text elements, the y coordinate for the element is
+RP-i + CELL_PAD, which should leave a space of CELL_PAD at the top and the
+bottom.
+
+So, drawing row lines is actually easy, we simply draw a line from column 0
+to the end of the last column at the given RP-i.
+
++ Private Functions
+
+void table_draw_row_lines(int nrows, int ncols)
+{
+  int i,N;
+  for(i=0;i<=nrows;i++)
+  {
+    N= n_table_row_lines;
+    coprint("  TL_ROW[%d]= off_y+rp%d; "
+              "TL_ROW[%d]= off_x+cp%d; "
+              "TL_ROW[%d]= off_x+cp%d;\n",
+                    3*N, i,       
+                    3*N+1, 0,
+                    3*N+2,  ncols);
+    n_table_row_lines++;
+  }
+}
+
++.
+The generated array has 3 integers per element, ordered as [y,x1,x2].
+This is used by the painting method draw_row_lines in the canvas.
+
+The harder part is the drawing of column lines. Each column has two
+lines associated with it. One on the left and one on the right. When
+computing positions for the elements, we calculated the following arrays:
+
+ - CP_i : Position for column line i. Column i occupies the space
+          [CP_i, CP_(i+1)]  in the x direction.
+
+We have ncols+1 elements in this array, the last one representing the vertical
+line at the end of the table.
+
+When we're drawing a column line, we start from the first row and move
+downwards. When we hit a cell which intersects the line, we stop. We draw
+our segment up to the row of that cell and start over with the next row.
+
+If we reach the last row without hitting any multi-column cells, we simply
+draw to the bottom of the table.
+
+In the function below, 
+- s : starting cell
+- sr: starting row line
+- er: ending row line
+- j : cell number
+- i : column line number
+
++ Private Functions
+
+void table_draw_col_lines(int nrows, int ncols, int ncells, cell_t *cells)
+{
+  int i,j, s, sr,er,N;
+  tricor_y *TA;
+  int nT;
+
+  TA= malloc(sizeof(*TA)*(ncols+1)*(nrows+1));
+  nT= 0;
+
+  i= -1;
+nextcol:
+  i++;
+  if (i>ncols) goto donecol;
+
+  s= 0;
+  sr= 0;
+nextseg:
+  for(j=s;j<ncells;j++)
+    if (i>cells[j].col && i<cells[j].col+cells[j].colspan) 
+       break;
+  if (j==ncells) er= nrows;
+     else        er= cells[j].row;
+
+  if (sr!=er)
+  {
+    TA[nT].y1= sr;
+    TA[nT].y2= er;
+    TA[nT].x=  i; 
+    nT++;
+  }
+  if (j==ncells) goto nextcol;
+  sr= er+1;
+  s= j+1;
+  goto nextseg;
+donecol:
+  sort_tricor_y(TA, nT);
+  for(i=0;i<nT;i++)
+  {
+    N= n_table_col_lines;
+    coprint("  TL_COL[%d]= off_y+rp%d; "
+              "TL_COL[%d]= off_y+rp%d; "
+              "TL_COL[%d]= off_x+cp%d;\n",
+                  3*N, TA[i].y1,       
+                  3*N+1, TA[i].y2, 
+                  3*N+2, TA[i].x );
+    n_table_col_lines++;
+  }
+  free(TA);
+}
+
++.
+The generated table has again 3 integers per element, ordered as [y1,y2,x].
+
+These two functions don't actually record anything except for the code
+to fill in the tables. They simply increment the corresponding variables
+n_table_row_lines and n_table_col_lines so that we can initialize some
+space for them in the canvas when we lay the document out.
+
+It turns out that the column lines can't be printed like that. We need
+to print them such that they are sorted by y coordinates. Otherwise the
+canvas algorithm prematurely stops and doesn't paint necessary lines.
+
+The lines need to be sorted by both the y coordinates so a simple generation
+technique won't work. I need to 
+- generate the lines using the above function
+- sort them
+- output the sorted list
+
+In order to make the code easier, I will define a new struct for this:
+
++ Private Types
+
+typedef struct { int y1,y2; int x; } tricor_y;
+
++ Private Functions
+
+void sort_tricor_y(tricor_y *A, int n)
+{
+  qsort(A, n, sizeof(A[0]), compar_tricor_y);
+}
+
+int compar_tricor_y(const void *A, const void *B)
+{
+  const tricor_y *a= A, *b= B;
+  int r;
+  r= a->y1 - b->y1; if (r) return r;
+  r= a->y2 - b->y2; if (r) return r;
+  return a->x  - b->x;  
+}
+
++.
+

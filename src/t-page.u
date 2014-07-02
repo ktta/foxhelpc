@@ -1,0 +1,25 @@
++.
+This file tests the basic drawing stuff. It gets a one-page document from
+t-parse and displays it on the canvas.
+
+> t-page.cc nolines
+
+<./t-parse test.ref
+<
+
+
+int main(int argc,char **argv)
+{
+  FXApp* app;
+
+  app= new FXApp("YAK", "KUT");
+  app->init(argc, argv);
+  app->create();
+  help("fmt.images");
+  app->run();
+  return 0;
+}
+
++.
+Let's test this crazy thing!
+

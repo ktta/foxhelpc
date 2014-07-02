@@ -1,0 +1,27 @@
+
+FOX_CFLAGS {fox-config --cflags} #prgout
+FOX_LIBS   {fox-config --libs}   #prgout
+
+
+{t-parse.u parse.u output.u wordlk.u tabout.u image.u page.u util.u
+           links.u }
+   t-parse.c #t2c
+
+t-parse.c #gcompile
+ifile.c #compile
+
+t-parse { t-parse.o ifile.o buffer.o critbit.o pngdim.o} -lpng #link
+
+t-parse.c { menuco.cc helpwin.cc canvas.cc iface.cc } #depends.here
+
+
+t-page.u t-page.cc #t2c
+t-page.cc { +triggers { t-parse test.ref } } #modify
+t-page.cc {} $FOX_CFLAGS #gcompile.c++
+pngdim.c #compile
+
+t-page {t-page.o } $FOX_LIBS #link.c++
+
+
+
+

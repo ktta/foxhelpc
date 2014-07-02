@@ -1,0 +1,140 @@
++.
+Parsing images is simple, we simply get the file name from the directive.
+
++.
+The image number starts from zero and increases everytime we make an
+image. This serves as an index to the images array in the canvas.
+
++ Private Variables
+  static int inum;
+
++ Page Init
+    inum= 0;  
+
++ Private Functions
+
+void parse_image()
+{
+  char *cmd,*e;
+  int i;
+  docnode_t *N;
+  remove_leading_spc(line);
+  if (line[0]!='[') exit(fprintf(stderr,"image: internal error 1\n"));
+  remove_part(line, 0,1);
+  remove_leading_spc(line);
+  cmd= "image";
+  if (!strpfx(cmd, line)) exit(fprintf(stderr,"image: internal error 2\n"));
+  remove_part(line, 0,strlen(cmd));
+  remove_leading_spc(line);
+  for(i=0;line[i] && !ispc(line[i]) &&line[i]!=']';i++) ;
+  line[i]= 0;
+  N= calloc(1,sizeof(*N));
+  N->i_path= relapath(file_name, line);
+  N->kind= 'I';
+  e= get_png_dimensions(N->i_path, &N->i_width, &N->i_height);
+  if (e)
+    exit(fprintf(stderr,"can't get dimensions "
+                        "for image %s: %s\n", N->i_path,e));
+  add_node(N);
+}
+
+char *relapath(char *base, char *name)
+{
+  int L;
+  char buf[2000];
+  L= strlen(base)-1;
+  while(L>=0 && base[L]!='/') L--;
+  if (L<0) return strdup(name);
+  base= strdup(base);
+  base[L]= 0;
+  sprintf(buf,"%s/%s", base,name);
+  free(base);
+  return strdup(buf);
+}
+
++.
+When we output images, we don't buffer the image data inside the command
+buffer. Instead, we simply copy it from the external file. The images are
+described with the following three-field struct, the proper definition of
+this is in canvas.u.
+
+  imagedef: int w, int h, const char *data
+
+So, let's do the file-printing stuff first, after that we can do the 
+output function.
+
++ Private Functions
+
+void print_image_file(int num, char *path)
+{
+  FILE *f;
+  int k,i,j;
+  unsigned char buf[2000];
+  f= fopen(path,"rb");
+  if (!f) exit(fprintf(stderr,"can't open %s: %s\n", path, strerror(errno)));
+  j= 0;
+  printf("static const unsigned char img%ddata[]={\n",num);
+  while(k=fread(buf,1,sizeof(buf), f))
+    for(i=0;i<k;i++,j++)
+    {
+      if (j%12==0) printf("\n");
+      printf("%d,",buf[i]);
+    }
+  printf("\n};\n");
+  fclose(f);
+}
+
++.
+In order to properly separate images page by page, we need to buffer these
+things in a different way. We need to keep a list of these for each page.
+Later on we use that list to iterate over the files.
+
++ Private Types
+
+typedef struct imageref 
+   { struct imageref *next; int number,width,height;
+            char *path; } imageref_t;
+
++ Private Variables
+    static imageref_t *imgs, **imgtail;
++ Page Init
+    imgs= NULL; imgtail= &imgs; 
+
++ Private Functions
+
+void output_image(docnode_t *N)
+{
+  imageref_t *R;
+
+  R= malloc(sizeof(*R));
+  R->number= inum++;
+  R->path= N->i_path;
+  R->next= NULL;
+  R->width= N->i_width;
+  R->height= N->i_height;
+  *imgtail= R;
+  imgtail= &R->next;
+
+  coprint("  canvas->image(%d);\n",R->number);
+}
+
+void print_imagedefs()
+{
+  imageref_t *R;
+
+  if (!inum)
+  {
+    printf("  canvas->set_images(NULL,0);\n");
+    return ;
+  }
+
+  for(R=imgs;R;R=R->next)
+     print_image_file(R->number, R->path);
+
+  printf("  static imagedef_t images[]= {\n");
+  for(R=imgs;R;R=R->next)
+     printf(" {%d, %d, img%ddata},\n", R->width, R->height, R->number);
+  printf("};\n");
+  printf("  canvas->set_images(images, %d);\n",inum);
+}
+

@@ -1,0 +1,107 @@
+a line starting with a parenthesis will indicate a term of a term-definition
+list.
+
+simdi 
+                             Empty line?
+  paragraph -> paragraph :    yes
+  paragraph -> secheader:     yes
+  secheader -> paragraph:     yes
+
+font:
+
+  link:  underline sadece, normal font.  0
+  em  :  bold normal font         5
+  sec :  font 1 - 4 according to its level
+  
+sec 4: chapter
+    3: section
+    2: sub-section
+    1: sub-sub section??
+
+ expr: monospace  6
+ 
+ normal font: 0
+
+sonradan obur seyleri de yapicaz, kod vs. gibi seyleri.
+
+
+background: 
+foreground:
+   0:  normal
+   1:  red
+   2:  green
+   3:  cell highlight filan
+
+simdi::word[0] == reserved for bullet list items.
+
+table icin:
+
+ butun item'larin width'ine bak.
+
+ maximum'a bakarak colum width'leri bul.
+
+ multi-column cell'ler varsa, ve bunlarin genisligi iki columun genisliginden
+ fazlaysa arta kalani columlar arasinda dagitmaya calis.
+
+
+simdi, bunlardan once benim bir quot mekanizmasi olusturmam gerek.
+
+[quot <> <this is nice I can say ]>]
+
+oahh..
+onu soyle yapicam, [pLs] => [ character,
+
+hmm. deneyek:
+
+  this is [pLs]good  => this is [good.
+  th[pLs]at is not   => th[at is not
+  [pLs][red aa]      => same thing as A[red]... doesn't work.
+
+en guzeli ben bunu @ kerekteriyle cozuyim. @@ -> @x= x. evet.
+yok pls guzel. sonra isler cigirindan cikiyor.
+
+e peki. ne yapicaz, word'u parse ettikten sonra mi yapicaz o isleri?? 
+olabilir. ama bastan da onu sanki ayri biseymis gibi yapmamamiz gerek.
+evet.
+
+
+[hCL+foo]
+[+piihiih]
+[E]
+[] 
+evet en guzeli boyle..
+
+simdi, cizgi cekmek icin ne yapicaz:::
+
+  row cizgileri her halukarda var zaten orda sorun yok.
+
+col cizgileri de sadece multi-col bisey kesiyorsa o arada kalkiyor.
+onun disinda hep var.
+
+
+ o zaman:
+
+ for X= 0 .. ncols-1
+  s= 0
+again:
+  e= nrows
+  for C= 0 .. ncells-1
+    if X> C.start & X<C.end  e=C.row break
+  
+  line [ s, e @ X.pos ]
+  if e!=nrows s=e+1 goto again
+
+linkler: cok basit olacak:
+
+  link_t { start_elt, end_elt, target };
+
+sonra, her bir page icindeki ufak section'larin numaralari olacak ya,
+onlari da kanvas'in icinde saklayip bak bu section'i goster gibi bisey
+dememiz gerek..
+
+yok gerek yok element'e ziplama gibi bisey yapicam oylesi daha guzel.
+
+[link section %name%] 
+[pos name]
+
+

@@ -1,0 +1,98 @@
++ Private Variables
+  char *chapter_menu;
+
++ Private Functions
+
+void get_chapter_menu()
+{
+  docnode_t *N;
+  buffer_t *buf;
+  buf= buffer_new(1024);
+  for(N=doc->next;N!=doc;N=N->next)
+    if (N->kind=='S' && N->level==4)
+      buffer_printv(buf,'s', " win->menu_add_chapter(", 
+                        's', N->s_title_encoded,
+                        's', ", ",
+                        'I', N->s_number,
+                        's', ");\n" );
+  buffer_write(buf, "",1);
+  buffer_free(buf, (void**) &chapter_menu, NULL);
+}
+
++ Private Functions
+
+void check_first_node()
+{
+  docnode_t* N;
+  N= doc->next;
+
+  if (N->kind!='S' || N->level!=4)
+    exit(fprintf(stderr,"Document contains text without a chapter "
+                        "header at the very start. Aborting.\n"));
+}
+
++.
+To do the title printing, we need to figure out the titles first.
+
++ Private Functions
+
+void calculate_section_titles()
+{
+  docnode_t *N;
+
+  for(N=doc->next;N!=doc;N=N->next)
+    if (N->kind=='S')
+    {
+      N->s_title= collect_seq_str(N->elts);
+      N->s_title_encoded= encode_str(N->s_title);
+    }
+}
+
+
+char *collect_seq_str(elt_t *elts)
+{
+  buffer_t *B;
+  char *str;
+  elt_t *E;
+
+  B= buffer_new(128);
+  for(E=elts->next;E!=elts;E=E->next)
+  {
+     if (E!=elts->next) buffer_write(B, " ",1);
+     buffer_write(B, E->txt, strlen(E->txt));
+  }
+  buffer_write(B, "",1);
+  buffer_free(B, (void**) &str, NULL);
+  return str;
+}
+
+
++.
+We need to generate the section menu arrays. This will let us easily
+print references to them without any work.
+
++ Private Functions
+
+void print_section_menu_arrays()
+{
+  docnode_t *N;
+  int st;
+  st= 0;
+  for(N=doc->next;N!=doc;N=N->next)
+  {
+    if (N->kind!='S') continue;
+    switch(N->level)
+    {
+       case 4: if (st) printf("{NULL,0} };\n");
+               st= 1;
+               printf("static const sipair_t secmen_%d[]= {\n", N->s_number);
+               break;
+       case 3: printf("{%s, %d},\n", N->s_title_encoded, N->s_number);
+               break;
+    } 
+  }
+  if (st) printf("{NULL, 0} };\n");
+}
+
++.
+

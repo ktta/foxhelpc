@@ -1,0 +1,784 @@
++.
+The parser is now line based. 
+
++ Private Variables
+
+uint8_t *line;
+size_t line_len;
+int line_number;
+char *file_name;
+ifile_t *input;
+
++ Private Functions
+
+void parse_file(char *name)
+{
+  if (ifile_open(&input,name))
+     exit(fprintf(stderr,"%s\n", ifile_error(input)));
+  file_name= name;
+  if (read_line()) return ;
+  parse_top();
+  ifile_close(input);
+}
+
+int read_line()
+{
+  if (line) free(line); line= NULL;
+  if (ifile_get_line(input, &line, &line_len, 1))
+    return 1;
+  line_number= ifile_line_number(input);
+  return 0;
+}
+
+void parse_top()
+{
+ while(1)
+ {
+  switch(classify())
+  {
+  case 'I': parse_image(); break;
+  case 'L': parse_list(); continue;
+  case 'S': parse_section_header(); break;
+  case 'E': break;
+  case 'V': parse_verbatim(); continue;
+  case 'T': parse_table(); break;
+  case 'A': parse_anchor(); break;
+  case '.': return ;
+  default:  parse_paragraph(); continue;
+  }
+  if (read_line()) return ;
+ }
+}
+
+int classify()
+{
+  int i;
+  if (!line) return '.';
+  i= skipspc(line, 0);
+  if (!line[i]) return 'E';
+  if (line[i]=='-') return 'L';
+  if (line[i]=='=') return 'S';
+  if (line[i]=='[')
+  {
+    int s;
+    char *cmd;
+    i++;
+    s= skipspc(line,i);
+    for(i=s;line[i]&&!ispc(line[i])&&line[i]!=']';i++) ;
+    cmd= get_part(line, s,i);
+    if (!strcmp(cmd,"code")) { classify_cmd= cmd; return 'V'; }
+    if (!strcmp(cmd,"table")) { classify_cmd= cmd; return 'T'; }
+    if (!strcmp(cmd,"end")) { classify_cmd= cmd; return 'Z'; }
+    if (!strcmp(cmd,"image")) { classify_cmd= cmd; return 'I'; }
+    if (!strcmp(cmd,"anchor")) { classify_cmd= cmd; return 'A'; }
+    free(cmd);
+  }
+  return 'P';
+}
+
+void parse_section_header()
+{
+  int i;
+  int seclevel;
+  i= skipspc(line, 0);
+  seclevel= 0;
+  while(line[i]=='=') { i++; seclevel++; }
+  remove_part(line, 0, i);
+  normalize_spaces(line);
+  if (line[0]==0) 
+    exit(fprintf(stderr, "near %s:%d: empty section header\n",
+                          file_name, line_number));
+  add_section(seclevel, line);
+}
+
+
+void normalize_spaces(uint8_t *str)
+{
+  remove_leading_spc(str);
+  remove_trailing_spc(str);
+}
+
+void remove_trailing_spc(uint8_t *str)
+{
+  size_t L;
+  L= strlen(str);
+  while(L>0 && ispc(str[L-1])) str[--L]= 0; 
+}
+
+void remove_part(uint8_t *str, int start, int end)
+{
+  if (start<end)
+     memmove(str+start, str+end, strlen(str+end)+1);
+}
+
+void parse_paragraph()
+{
+  buffer_t *B;
+  char *str;
+  size_t len;
+
+  B= buffer_new(128);
+  while(1)
+  {
+    buffer_write(B, line, strlen(line));
+    buffer_write(B, " ", 1);
+    if (read_line()) break;
+    switch(classify())
+    {
+    case 'A':
+    case '.': case 'I': case 'L': case 'V': case 'E': case 'S': goto done;
+    }
+  }
+done:
+  buffer_write(B, "", 1);
+  buffer_free(B, (void**) &str, &len);  
+  normalize_spaces(str);
+  add_paragraph(str);
+  free(str);
+}
+
+int skipspc(uint8_t *str, int i)
+{
+  while(ispc(str[i])) i++;
+  return i;
+}
+
+int ispc(uint32_t K)
+{
+  return (K>0 && K<=' ') || (K==127);
+}
+
++.
+This seems pretty nice. Now we need to parse inside the paragraphs.
+
+Actually, this will be done also for table elements and list items.
+So I will call this a sequence. Each sequence will consists of some elements.
+
++ Public Types 100
+
+typedef struct elt {
+  int kind;
+  char *txt;
+  char *arg;
+  struct elt *children;
+  struct elt *prev,*next;
+} elt_t;
+
++.
+For simple words, arg and children will be null. For simple formatters,
+arg will be null and 'children' will contain a sequence of words (nested
+formatters are not allowed). For links, arg will be the target.
+
++ Private Functions
+
+elt_t *parse_seq(uint8_t *str,int cmds)
+{
+  int i,k;
+  char *cmd;
+  elt_t *seq,*E;
+  seq= malloc(sizeof(*seq));
+  seq->prev= seq->next= seq;
+
+again:
+  remove_leading_spc(str);
+  if (str[0]==0) return seq;
+  if (!cmds || str[0]!='[') goto normal_word;
+  if (escape_seq(str)) goto normal_word;
+  i=1;
+  k=1;
+nextchr:
+  switch(str[i])
+  {
+  case 0: goto unmatched;
+  case '[': k++; break;
+  case ']': k--; if (k==0) goto done;
+            break;
+  case '\\': i++; if (str[i]==0) goto unmatched;
+             break;
+  default:  break;
+  }
+  i++;
+  goto nextchr;
+done:
+  cmd= get_part(str, 1, i);
+  i++;
+  remove_part(str, 0,i);
+  E= calloc(1, sizeof(*E));
+  E->kind= 'C';
+
+  remove_part(cmd, 0,skipspc(cmd,0));
+  if (cmd[0]==0) goto invalid;
+  for(i=0;cmd[i] && !ispc(cmd[i]);i++) ;
+  E->txt= get_remove_part(cmd, 0,i);
+  remove_leading_spc(cmd);
+  if (!strcmp(E->txt,"link"))
+  {
+    E->arg= cmd;
+  } else {
+    if (cmd[0]!=0) E->children= parse_seq(cmd, 0);
+    free(cmd);
+  }
+  goto insert;
+
+insert:
+  E->prev= seq->prev; E->next= seq;
+  seq->prev->next= E; seq->prev= E;
+  goto again;
+invalid:
+  fprintf(stderr,"near %s:%d: invalid command sequence\n", 
+                  ifile_file_name(input), ifile_line_number(input));
+  exit(1);
+unmatched:
+  fprintf(stderr,"near %s:%d: unmatched '['\n", 
+                  ifile_file_name(input), ifile_line_number(input));
+  exit(1);
+
+normal_word:
+  for(i=0;str[i] && !ispc(str[i]);i++)  ;
+  E= calloc(1,sizeof(*E));
+  E->kind= 'W';
+  E->txt= get_remove_part(str, 0,i);
+  replace_escape_seqs(E->txt);
+  goto insert;
+}
+
+
+char *get_part(char *str, int start, int end)
+{
+  char *T;
+  int L;
+  L= end-start;
+  T= malloc(L+1);
+  memcpy(T, str+start, L);
+  T[L]= 0;
+  return T;
+}
+
+char *get_remove_part(char *x, int start, int end)
+{
+  char *R;
+  R= get_part(x,start,end);
+  remove_part(x,start,end);
+  return R;
+}
+
+void remove_leading_spc(char *x)
+{
+  remove_part(x, 0,skipspc(x,0));
+}
+
++.
+For this to work properly, we need to define a top-level node.
+
++ Public Types
+
+typedef struct docnode
+{
+  int kind;
+  struct docnode *prev,*next;
+  elt_t *elts;
+  int level; // for sections and lists
+
+  int s_number;          // section number
+  char *s_title;         // section title
+  char *s_title_encoded; // above in encoded form, with quotes and everything.
+        // the following two are meaningful only for subsections.
+  int s_parentno;        // number of the parent section
+  int s_eltstart;        // the element number starting this subsection.
+
+  vline_t *vlines;
+  char *vcmd;
+
+  int t_ncells, t_nrows, t_ncols;
+  cell_t *t_cells;
+
+  int i_width, i_height;
+  char *i_path;
+
+  char *a_txt;         // anchor text
+
+  int lno; char* fname;
+} docnode_t;
+
+
++ Private Functions
+
+void print_docnode(docnode_t *N)
+{
+  switch(N->kind)
+  {
+  case 'P': printf("PAR["); print_seq(N->elts); printf("]\n"); break;
+  case 'S': printf("SEC(%d)[",N->level); print_seq(N->elts);
+            printf("]\n"); break;
+  }
+}
+
+void print_docnodelist(docnode_t *head)
+{
+  docnode_t *N;
+  for(N=head->next;N!=head;N=N->next)
+     print_docnode(N);
+}
+
+void print_seq(elt_t *E)
+{
+  elt_t *X;
+  for(X=E->next;X!=E;X=X->next)
+  {
+   switch(X->kind)
+   {
+   case 'W': printf("W(%s)", X->txt); break;
+   case 'C': printf("C(%s)", X->txt); 
+             if (X->arg) printf("{%s}",X->arg);
+             printf("[");
+             if (X->children) print_seq(X->children);
+             printf("]");
+             break;
+   }
+  }
+}
+
++.
+Now that we have the inline parser, we can write the add_par and add_sec
+functions properly.
+
++ Private Variables
+  static int secnum;
+
++ Private Functions
+
+void add_section(int level, char *txt)
+{
+  docnode_t *N;
+  N= calloc(1,sizeof(*N));
+  N->kind= 'S';
+  N->level= level;
+  N->elts= parse_seq(txt,0);
+  N->s_number= secnum++;
+  add_node(N);
+}
+void add_paragraph(char *txt)
+{
+  docnode_t *N;
+  N= calloc(1,sizeof(*N));
+  N->kind= 'P';
+  N->elts= parse_seq(txt,1);
+  add_node(N);
+}
+
+void add_node(docnode_t *N)
+{
+  if (!doc)
+  {
+    doc=calloc(1,sizeof(*doc));
+    doc->prev= doc->next= doc;
+  }
+  N->fname= file_name;
+  N->lno= line_number;
+  N->prev= doc->prev;
+  N->next= doc;
+  doc->prev->next= N;
+  doc->prev= N;
+}
+
++ Private Variables
+
+static docnode_t *doc;
+static char *classify_cmd;
+
++.
+Parsing verbatim text is very easy. We simply collect the lines until
+we see the 'Z' line, which is an [end] command on a line by itself.
+Each verbatim line is output as a separate line, so they are not collected
+into buffer like the paragraphs do. Instead, they put into a linked
+list so that I don't have to split them later again.
+
++ Public Types 150
+
+typedef struct vline {
+  struct vline *next;
+  elt_t *elts;
+} vline_t;
+
++ Private Functions
+
+void parse_verbatim()
+{
+  int i;
+  vline_t **tail,*VL,*first;
+  char *quot;
+  char *cmd;
+
+  remove_leading_spc(line);
+  remove_part(line,0,1);  // skip the '['
+  for(i=0;line[i] && !ispc(line[i]);i++) ; // skip the command, it's already
+                                           // in classify_cmd
+  remove_part(line, 0,i);
+  cmd= strdup(classify_cmd);
+  remove_leading_spc(line);
+  if (line[0]==0 || line[0]==']' || line[1]==0) quot=strdup("[]");
+  else { quot= strdup(line); quot[2]=0; }
+
+  first= NULL;
+  tail= &first;
+  while(1)
+  {
+    if (read_line()) 
+       exit(fprintf(stderr,"near %s:%d: unexpected end of file in verbatim\n",
+                               file_name, line_number));
+    if (classify()=='Z') break;
+    VL= malloc(sizeof(*VL));
+    VL->elts= parse_verbatim_line(line,quot);
+    VL->next= NULL;
+    *tail= VL;
+    tail= &VL->next;
+  }
+  read_line(); // skip the 'Z' line.
+
+  add_verbatim(cmd, first);
+}
+
++ Private Functions
+
+void add_verbatim(char *cmd, vline_t *V)
+{
+  docnode_t *N;
+  N= calloc(1,sizeof(*N));
+  N->vcmd= cmd;
+  N->vlines= V;
+  N->kind= 'V';
+  add_node(N);
+}
+
++.
+Now I need to parse inside the verbatim lines. This should be done
+during the reading so that we can give somewhat reliable error 
+messages.
+
++ Private Functions
+
+elt_t *parse_verbatim_line(char *x,char *quot)
+{
+  int i;
+  char *s;
+  elt_t *seq,*E;
+  seq= malloc(sizeof(*seq));
+  seq->prev= seq->next= seq;
+  s= x;
+
+again:
+  if (*x==0 || *x=='\n') goto done;
+
+  for(s=x;s[0]!=0 && s[0]!='\n' && s[0]!=quot[0];s++)  ;
+  
+  if (s!=x)
+  {
+     E= seq_add_elt(seq, 'W');
+     E->txt= get_remove_part(x, 0, s-x);
+     goto again;
+  }
+  if (s[0]!=quot[0]) goto done;
+
+  remove_part(x,0,1); // remove the quot character
+  remove_leading_spc(x);
+  for(i=0;x[i]!=quot[1] && x[i]!=0 && !ispc(x[i]);i++) ;
+
+  E=seq_add_elt(seq, 'C');
+  E->txt= get_remove_part(x, 0, i);
+  if (E->txt[0]==0) 
+      exit(fprintf(stderr,"near %s:%d: empty command in verbatim\n",
+                           file_name, line_number));
+  E->children= malloc(sizeof(E->children[0]));
+  E->children->prev= E->children->next= E->children;
+
+  remove_leading_spc(x);
+  for(i=0;x[i]!=quot[1] && x[i]!=0 && x[i]!='\n';i++) ;
+  if (x[i]=='\n' || x[i]==0)
+      exit(fprintf(stderr,"near %s:%d: unterminated command in verbatim\n",
+                           file_name, line_number));
+  
+  E= seq_add_elt(E->children, 'W');
+  E->txt= get_part(x,0,i);
+  remove_part(x, 0,i+1);
+  goto again;
+
+done:
+  return seq;
+}
+
+elt_t *seq_add_elt(elt_t *head, int kind)
+{
+  elt_t *E;
+  E= calloc(1,sizeof(*E));
+  E->kind= kind;
+  E->prev= head->prev; E->next= head;
+  head->prev->next= E; head->prev= E;
+  return E;
+}
+
++.
+Parsing lists is quite easy. A list is identified by leading dashes.
+An item of the list continues until the next item or the next paragraph.
+In order for a line to be a part of the list item, it should start with
+some whitespace.
+
+Actually, lists are not parsed as separate objects. They are simply
+'bullet' paragraphs.
+
++ Private Functions
+
+void parse_list()
+{
+  int i;
+  int level;
+  buffer_t *B;
+  char *str;
+  size_t len;
+
+  remove_leading_spc(line);
+  for(level=0;line[level]=='-';level++)
+    ;
+  remove_part(line,0,level);
+  remove_leading_spc(line);
+  if (line[0]==0) 
+  {
+    read_line();
+    return ;
+  }
+  
+  if (level==0) level= 1;
+  if (level>5)  level= 5;
+
+  B= buffer_new(128);
+
+  while(1)
+  {
+    buffer_write(B, line, strlen(line));
+    buffer_write(B, " ", 1);
+    if (read_line()) break;
+    switch(classify())
+    {
+    case 'A': case '.':
+    case 'I': case 'T': case 'L': case 'V': case 'E': case 'S': goto done;
+    }
+    if (skipspc(line,0)==0) goto done;
+  }
+done:
+  buffer_write(B, "", 1);
+  buffer_free(B, (void**) &str, &len);  
+  normalize_spaces(str);
+  add_list(level,str);
+  free(str);
+}
+
+void add_list(int level,char *txt)
+{
+  docnode_t *N;
+  N= calloc(1,sizeof(*N));
+  N->kind= 'L';
+  N->elts= parse_seq(txt,1);
+  N->level= level;
+  add_node(N);
+}
+
++.
+I'm going to implement tables pretty soon, but I have to first implement
+some escape encoded stuff. Here is the list of escape sequences:
+
+  [pLs]     [
+  [pRs]     ]
+  [pLr]     (
+  [pRr]     )
+
+I'll do some more later maybe.
+
++ Private Functions
+
+static int escape_seq(char *str)
+{
+  if (strpfx("[pLs]",str)) return '[';
+  if (strpfx("[pRs]",str)) return ']';
+  if (strpfx("[pLr]",str)) return '(';
+  if (strpfx("[pRr]",str)) return ')';
+  return 0;
+}
+
+static void replace_escape_seqs(char *str)
+{
+  int i,k;
+  while(*str)
+  {
+    k= escape_seq(str);
+    if (k)
+    { 
+      for(i=0;str[i];i++) if (str[i]==']') break;
+      if (!str[i]) return ;
+      remove_part(str,1,i+1);
+      str[0]= k;
+    }
+    str++;
+  } 
+}
+
+int strpfx(char *pfx, char *k)
+{
+  int i;
+  for(i=0;pfx[i];i++)
+    if (k[i]!=pfx[i]) return 0;
+  return 1;
+}
+
++.
+Parsing tables is also done in two steps: first we parse the whole thing
+into a buffer. After that, we split it into cells. Let's try to make a table
+struct:
+
+ typedef struct {
+   int nrows, ncols,ncells;
+   cell_t *cells;
+ } table_t;
+
+ typedef struct
+ {
+   elt_t *seq;
+   int row,col, colspan;
+   int cellnr;
+ } cell_t;
+
+
+Later on, when we want to find out about the width of a column, we do the
+following:
+
+  for C in cells where C.col=col and C.colspan=1:
+    w(col)= max(C.width, col_w);
+
+ for N= 2 .. ncols
+  for C in cells where C.colspan=N:
+    diff = C.width - sum( w(C.start) .. w(C.end) )  
+    if diff > 0 then
+        N= C.end - C.start +1
+        for K= C.start .. C.end
+          if (N) w(K)+= diff / N; diff-=diff/N; else w(K)+= diff; fi
+          N--;
+    fi
+ 
+so, we need to store the column numbers inside the cells. In each row,
+we will have a list of cells. We will also need the text and the formatting,
+of course.
+
++ Private Functions
+
+void parse_table()
+{
+  buffer_t *B;
+  char *str;
+  size_t len;
+  int start_lno;
+
+  start_lno= line_number;
+  B= buffer_new(128);
+again:
+  if (read_line()) goto done;
+  switch(classify())
+  {
+  case 'Z': goto done;
+  case '.': exit(fprintf(stderr,"near %s:%d: unterminated table\n",
+                                 file_name, start_lno));
+  }
+  buffer_write(B, line, strlen(line));
+  buffer_write(B, " ", 1);
+  goto again;
+
+done:
+  buffer_write(B, "", 1);
+  buffer_free(B, (void**) &str, &len);  
+  parse_table_content(str);
+  free(str);
+}
+
+void parse_table_content(char *str)
+{
+  buffer_t *cb;
+  cell_t C; 
+  docnode_t *N;
+  int i,k;
+  char *cellstr;
+
+  int ncells, nrows, ncols, col;
+  cb= buffer_new(128);
+  ncells= nrows= ncols= col= 0;
+
+again:
+  remove_leading_spc(str);
+  if (str[0]==0) goto done;
+  if (str[0]=='.') { nrows++; col= 0; remove_part(str,0,1); goto again; }
+  if (str[0]!='[') 
+     exit(fprintf(stderr,"near %s:%d: garbage within table data\n",
+                         file_name,line_number));
+  i= 1;
+  k= 1;
+  i++;
+next:
+  switch(str[i])
+  {
+  case 0: exit(fprintf(stderr,"near %s:%d: unterminated table entry\n",
+                          file_name, line_number));
+  case '[': k++; i++; goto next;
+  case ']': k--; if (k==0) goto found; 
+  default: i++; goto next;
+  }
+found:
+  cellstr= get_part(str, 1, i);
+  remove_part(str, 0, i+1);
+  for(i=0;cellstr[i];i++) if (cellstr[i]=='+') break;
+  if (cellstr[i])
+     C.fmt= get_remove_part(cellstr, 0,i+1);
+  else
+     C.fmt= NULL;
+  C.seq= parse_seq(cellstr,1);
+  C.col= col;
+  C.row= nrows;
+  C.colspan= get_numeric(C.fmt,1);
+  if (C.colspan<1) C.colspan= 1;
+  col+= C.colspan;
+  if (col>ncols) ncols= col;
+  buffer_write(cb, &C, sizeof(C));
+  ncells++;
+  goto again;
+done:
+  nrows++;
+  N= malloc(sizeof(*N));
+  N->kind= 'T';
+  buffer_free(cb, (void**) &N->t_cells, NULL);
+  N->t_ncells= ncells;
+  N->t_nrows= nrows;
+  N->t_ncols= ncols;
+  add_node(N);
+}
+
+static int get_numeric(char *txt, int V)
+{
+  int i,j;
+  char *z;
+  if (!txt) return V;
+  for(i=0;txt[i];i++) if (isdigit(txt[i])) break;
+  if (!txt[i]) return V;
+  for(j=i;txt[j];j++) if (!isdigit(txt[j])) break;
+  z= get_remove_part(txt,i,j);
+  V= atoi(z);
+  free(z);
+  return V;
+}
+
++.
+So, yeah here is the cell struct we need for tables:
+
++ Public Types 150
+
+typedef struct {
+  int col, row, colspan;
+  char *fmt; elt_t *seq;
+} cell_t;
+
++.
+

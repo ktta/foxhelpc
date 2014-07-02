@@ -1,0 +1,532 @@
++.
+We will have a couple of output buffers.
+
+- Word list
+- Word sequence
+- Instruction sequence
+
+The word list is in wordlk.u. The word sequence will be a sequence of
+word,style pairs. 
+
+
++ Private Functions
+
+
+void section_style(int level, int *style, int *font)
+{
+  if (level>4) level= 4;
+  if (level<1) level= 1;
+  *font= level;
+  *style= level;
+}
+
+void inline_style(char *cmd, int *Rstyle, int *Rfont)
+{
+  int fg, bg, font,ul;
+  fg= bg= font= ul= 0;
+  if (!strcmp(cmd,"prg"))
+  {
+    font= 5;
+    fg= 1;
+  }
+  if (!strcmp(cmd,"red"))
+  {
+    bg= 1;
+  }
+  if (!strcmp(cmd,"ul"))
+  {
+    ul= 1;
+  }
+  if (!strcmp(cmd,"link"))
+  {
+    ul= 1;
+    fg= 3;
+  }
+  
+  *Rfont= font;
+  *Rstyle= (ul<<24) | (bg<<16) | (fg<<8) | font;
+}
+
+
++ Private Functions
+
+
+void print_str(unsigned char *x)
+{
+  printf("\"");
+again:
+  while(isalnum(*x)) { printf("%c",*x); x++; }
+  if (!*x) goto done;
+  printf("\\%03o",*x);
+  x++;
+  goto again;
+done:
+  printf("\"");
+}
+
+void output_seq(int default_style, elt_t *head,docnode_t *ref)
+{
+  unsigned int style, font;
+  elt_t *E,*Z;
+  int cbegin, cend;
+  for(E=head->next;E!=head;E=E->next)
+  {
+    if (E->kind=='W') 
+    {
+      output_elt(default_style, lookup_word(default_style&0xff, E->txt));
+      continue;
+    }
+    if (!strcmp(E->txt,"link")) { output_link(E, ref); continue; }
+    if (!E->children || E->children->next==E->children) continue;
+    inline_style(E->txt, &style, &font);
+    cbegin= seqlen;
+    for(Z=E->children->next;Z!=E->children;Z=Z->next)
+        output_elt(style, lookup_word(font, Z->txt));
+    cend= seqlen-1;
+    record_decor(style, cbegin, cend);
+  }
+}
+
++.
+
++.
+Handling underlines is exactly the same. So, I'm going to simply embed
+that into the bgrect functions..
+
+
+Verbatims are a different beast. 
+
++ Private Functions
+
+void output_verbatim(char *cmd, vline_t *VL)
+{
+  char buf[2000];
+  int style, font;
+  int def_style, def_font;
+  int bs, be;
+  verbatim_style(cmd, &def_style, &def_font);
+  bs= seqlen;
+
+  coprint("  canvas->verbatim_vspace();\n");
+  for(;VL;VL=VL->next)
+  {
+     elt_t *E;
+     int st,en;
+     if (VL->elts->next==VL->elts) { // empty line 
+         coprint("  canvas->pbreak();\n");
+         continue;
+     } 
+     st= seqlen;
+     for(E=VL->elts->next;E!=VL->elts;E=E->next)
+     {
+       if (E->kind=='W') 
+       {
+         output_elt( def_style, lookup_word(def_font, E->txt));
+         continue;      
+       }
+       verbatim_inline_style(E->txt, &style, &font);
+       if (E->children->next==E->children) continue;
+       output_elt( style, lookup_word(font,E->children->next->txt));
+       record_decor(style, seqlen-1, seqlen-1);
+     }
+     en= seqlen-1;
+     sprintf(buf,"  canvas->verbatim_line(%d,%d);\n", st, en);
+     buffer_write(combuffer, buf, strlen(buf));
+  }
+  coprint("  canvas->verbatim_vspace();\n");
+  be= seqlen-1;
+  if (bs<=be)
+     record_decor_entry(&verbox, &nverbox, bs, be, (def_style>>16)&0xff);
+}
+
+void verbatim_style(char *cmd, int *style, int *font)
+{
+  *font= 6;
+  *style= *font | (2<<16) ;
+}
+
+void verbatim_inline_style(char *cmd,int *Rstyle, int *Rfont)
+{
+  int fg, bg, font,ul;
+  fg= bg= font= ul= 0;
+  font= 6;
+  if (!strcmp(cmd,"red"))
+  {
+    bg= 1;
+  }
+  if (!strcmp(cmd,"ul"))
+  {
+    ul= 1;
+  }
+  if (!strcmp(cmd,"link"))
+  {
+    ul= 1;
+    fg= 3;
+  }
+  
+  *Rfont= font;
+  *Rstyle= (ul<<24) | (bg<<16) | (fg<<8) | font;
+}
+
++ Private Functions
+
+void output_list(docnode_t *N)
+{
+  int start;
+  start= seqlen;
+  output_elt(0,0);
+  output_seq(0,N->elts,N);
+  coprint("  canvas->bullet_println(%d, %d, %d);\n",
+                 N->level, start, seqlen-1);
+}
+
++.
+/***********************************************************************
+ *                                                                     *
+ *                              Word List                              *
+ *                                                                     *
+ ***********************************************************************/
+So, now I'm beginning to separate the thing into pieces. First of all,
+let's separate the words into their own function since they are shared
+by all pages.
+
++ Private Functions
+
+void print_init_words()
+{
+  char **words;
+  int nw;
+
+  words=get_word_list();
+  printf("static void init_words(FYGfxCanvas *canvas) {\n");
+  printf("static const char *words[]={\n");
+  for(nw=0;words[nw];nw++) { print_str(words[nw]); printf(",\n"); }
+  printf("};\n");
+  printf("  canvas->set_words(words,%d);\n",nw);
+  printf("}\n");
+}
++.
+There are a lot of variables being generated here. Let's collect them all
+into one place so that I can properly initialize them.
+
+
+static int n_table_row_lines, n_table_col_lines;
+
+
++ Private Functions
+
+void page_init()
+{
+: Page Init
+}
+
++.
+/***********************************************************************
+ *                                                                     *
+ *                           Element Buffer                            *
+ *                                                                     *
+ ***********************************************************************/
+This buffer holds the contents of the elts[] array in the canvas. It
+contains <style,word> pairs. 
+
++ Private Variables
+    static int seqlen;
+    static buffer_t *seqbuffer;
+
++ Page Init
+    seqlen= 0; seqbuffer= buffer_new(128);
+
++ Private Functions
+
+void output_elt(int style, int word)
+{
+  buffer_write(seqbuffer, &style, sizeof(style));
+  buffer_write(seqbuffer, &word, sizeof(word));
+  seqlen++;
+}
+
+void print_seq_buffer()
+{
+  uint32_t *seq;
+  int i;
+
+  buffer_free(seqbuffer, (void**) &seq, NULL); 
+
+  printf("static const unsigned int seq[]={\n");
+  for(i=0;i<seqlen*2;i++) printf("0x%x,", seq[i]);
+  printf("};\n");
+
+  printf("  canvas->set_elts(seq,%d);\n", seqlen);
+  seqbuffer= NULL;
+  seqlen= 0;
+  free(seq);
+}
+
++.
+/***********************************************************************
+ *                                                                     *
+ *                           Command Buffer                            *
+ *                                                                     *
+ ***********************************************************************/
+The command list will be some C++ code which will display the text items
+according to the document structure.
+
++ Private Variables
+    static buffer_t *combuffer;
+
++ Page Init 
+    combuffer= buffer_new(1024);
+
++ Private Functions
+
+void print_command_buffer()
+{
+  char *com;
+  buffer_write(combuffer, "", 1);
+  buffer_free(combuffer, (void**) &com, NULL);
+  puts(com);
+  free(com);
+  combuffer= NULL;
+}
+
+void coprint(const char *fmt, ...)
+{
+  char buf[2000];
+  va_list ap;
+  va_start(ap,fmt);
+  vsnprintf(buf, 1999, fmt, ap);
+  buf[1999]= 0;
+  va_end(ap);
+  buffer_write(combuffer, buf, strlen(buf));
+}
+
++.
+/***********************************************************************
+ *                                                                     *
+ *                         Decoration Buffers                          *
+ *                                                                     *
+ ***********************************************************************/
+These hold the arrays for 
+  - background rectangles
+  - underlines
+  - verbatim boxes
+
++ Private Variables
+    static buffer_t *bgbuffer,*underbuffer,*verbox;
+    static int nbg,nunder,nverbox;
+
++ Page Init
+    nbg= nunder= nverbox= 0;
+    bgbuffer= underbuffer= verbox= NULL;
+
++ Private Functions
+
+void print_bgrects()
+{
+  print_decor("bgrects", "set_bgrects", &bgbuffer, &nbg);
+  print_decor("underlines", "set_underlines", &underbuffer, &nunder);
+  print_decor("verboxes", "set_vboxes", &verbox, &nverbox);
+}
+
+void print_decor(char *varname, char *method, buffer_t **Rbuffer, int *Rn)
+{
+  buffer_t *buffer;
+  int n;
+  unsigned int *B;
+  int i;
+
+  buffer= *Rbuffer;
+  n= *Rn;
+  if (!n)
+  {
+     printf("  canvas->%s(NULL, 0);\n", method);
+     return ;
+  }
+
+  buffer_free(buffer, (void**) &B, NULL);
+  *Rbuffer= NULL;
+  *Rn= 0;
+  printf("static const unsigned int %s[]= {\n",varname);
+  for(i=0;i<n*3;i++) printf("0x%x,", B[i]);
+  printf("};\n");
+  printf("  canvas->%s(%s, %d);\n", method, varname,n);
+  free(B);
+}
+
++.
+The following function records some stuff into decoration arrays if
+the given style has non-default background color or underline.
+
++ Private Functions
+
+void record_decor(int style, int cbegin, int cend)
+{
+  if ((style>>16) &0xff)
+     record_decor_entry(&bgbuffer, &nbg, cbegin, cend, (style>>16)&0xff);
+
+  if ((style>>24) &1)
+     record_decor_entry(&underbuffer, &nunder, cbegin, cend, (style>>8)&0xff);
+}
+
+void record_decor_entry(buffer_t **Rbuffer, int *N, int B,int E, int C)
+{
+   buffer_t *buf;
+   buf= *Rbuffer;
+   if (!buf) buf= buffer_new(128);
+   buffer_write(buf, &B, sizeof(B));
+   buffer_write(buf, &E, sizeof(E));
+   buffer_write(buf, &C, sizeof(C));
+   (*N)++;
+   *Rbuffer= buf;
+}
+
++.
+Now we come back to the output function. This is getting really complicated.
+We're going to print individual functions for each page.
+
++ Private Functions
+
+void output_doc()
+{
+  docnode_t *N,*secstart;
+  elt_t *E,*Z;
+  int start;
+  int bg,font;
+  int i;
+  unsigned int style;
+
+  check_first_node();
+
+  N= doc->next;
+next_page:
+  secstart= N;
+  if (N==doc) return ;
+  page_init();
+
+next_node:
+
+  if (N->kind=='S' && N!=secstart && N->level>2)
+  {
+    // page ends here.
+    goto print_stuff;
+  }
+
+  if (N->kind=='S' && N!=secstart)
+  {
+    N->s_eltstart= seqlen;
+    N->s_parentno= secstart->s_number;
+  }
+  
+  // do the regular outputting.
+  output_node(N);
+  N= N->next;
+  if (N==doc) goto print_stuff;
+  goto next_node;
+
+print_stuff:
+  print_page_functions(secstart);
+  goto next_page;
+}
+
+void print_page_functions(docnode_t *secstart)
+{
+  printf("static void tf_%d(FYGfxCanvas* canvas) {\n",secstart->s_number);
+  print_table_coord_variables();
+  printf("canvas->reset_doc();\n");
+
+  print_command_buffer();
+
+  printf(" canvas->end_doc(tf_%d);\n",secstart->s_number);
+  printf("}\n");
+
+  printf("static void cf_%d(FYHelpWin *win) {\n",secstart->s_number);
+  printf("  FYGfxCanvas *canvas= win->canvas;\n");
+
+  print_seq_buffer();
+
+  print_bgrects();
+  print_imagedefs();
+  print_links();
+
+  print_section_menu(secstart);
+  printf("  tf_%d(canvas);\n",secstart->s_number);
+  printf("}\n");
+}
+
+void output_node(docnode_t *N)
+{
+  elt_t *E,*Z;
+  int start;
+  int bg,font;
+  int i;
+  unsigned int style;
+
+  switch(N->kind)
+  {
+  case 'S': font= N->level;
+            if (font>4) font= 4;
+            section_style(N->level, &style, &font);
+            start= seqlen;
+            for(E=N->elts->next;E!=N->elts;E=E->next)
+              output_elt(style, lookup_word(font, E->txt));
+            coprint("  canvas->println(%d,%d);\n", start,seqlen-1);
+            break;
+  case 'P': 
+            coprint("  canvas->pbreak();\n");
+            start= seqlen;
+            output_seq(0,N->elts,N);
+            coprint("  canvas->println(%d,%d);\n", start,seqlen-1);
+            break;
+  case 'I': output_image(N); break;
+  case 'L': output_list(N); break;
+  case 'V': output_verbatim(N->vcmd, N->vlines); break;
+  case 'T': output_table(N->t_nrows, N->t_ncols, 
+                         N->t_ncells, N->t_cells,N); break;
+  }
+}
+
++.
+Now we can output the link table easily.
+
++ Private Functions
+
+void print_link_table()
+{
+  docnode_t *N;
+  printf("typedef struct { void (*func)(FYHelpWin*); int eltno; } sec_t; \n");
+  printf("static sec_t sections[]= {\n");
+  for(N=doc->next;N!=doc;N=N->next)
+  {
+    if (N->kind!='S') continue;
+    if (N->level>2)
+      printf(" { cf_%d, 0 },\n", N->s_number);
+    else
+      printf(" { cf_%d, %d},\n", N->s_parentno, N->s_eltstart);
+  }
+  printf("};\n");
+}
+
++.
+Now, all we need is the section menu.
+
++ Private Functions
+
+void print_section_menu(docnode_t *secstart)
+{
+  docnode_t *N;
+  if (secstart->kind!='S') return ;
+
+  if (secstart->level==4) 
+  {
+     printf("  win->set_section_menu(secmen_%d);\n",secstart->s_number);
+     return ;
+  }
+
+  if (secstart->level!=3) return ; // this should never happen
+
+  for(N=secstart->prev;N!=doc;N=N->prev)
+    if (N->kind=='S' && N->level==4) break;
+  if (N==doc) return ;
+
+  printf("  win->set_section_menu(secmen_%d);\n",N->s_number);
+}

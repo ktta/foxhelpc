@@ -1,0 +1,52 @@
++ Private Functions
+
+void buffer_printv(buffer_t *buffer, int fmt, ...)
+{
+  int iarg; char *sarg; char buf[30];
+  va_list ap;
+  va_start(ap,fmt);
+
+  while(fmt!=0)
+  {
+    switch(fmt)
+    {
+     case 's': sarg= va_arg(ap, char*);
+               buffer_write(buffer, sarg, strlen(sarg));
+               break;
+     case 'I': iarg= va_arg(ap,int);
+               sprintf(buf,"%d", iarg);
+               buffer_write(buffer, buf, strlen(buf));
+               break;
+     default:  goto done;
+    }
+    fmt= va_arg(ap, int);
+  }
+done:
+  va_end(ap);
+}
+
+unsigned char *encode_str(unsigned char *src)
+{
+  char *buf;
+  int len,i;
+  buf= NULL;
+
+again:
+  len= 1;
+  for(i=0;src[i];i++)
+    if (isalnum(src[i]))
+    { if (buf) buf[len]= src[i];
+      len++; } else { if (buf) sprintf(buf+len, "\\%03o", src[i]);
+                      len+= 4; }
+  if (buf) { buf[len]= '"'; buf[len+1]= 0; return buf; }
+  buf= malloc(len + 2);
+  buf[0]= '"';
+  goto again;
+}
+
+void remove_all_spaces(unsigned char *z)
+{
+  unsigned char *t;
+  for(t=z;*z;z++) if (!ispc(z[0])) *(t++)= *z;
+  *t= 0;
+}

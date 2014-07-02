@@ -1,0 +1,234 @@
++.
+Since links can refer to stuff ahead of the current position, we need to
+process all the anchors first. The idea is simple: we record all anchors
+as name,number pairs. When outputting, we simply skip them.
+
+Since we're going to do a lookup at both runtime and compile time, we need
+a proper struct for this:
+
++ Private Types
+
+typedef struct { int secnum; char *name; int lno; char *fname; 
+                 docnode_t *node; } aanchor_t;
+
++ Private Variables
+  aanchor_t *anchors; int n_anchors;
+
++ Private Functions
+void collect_anchors()
+{
+  int i;
+  aanchor_t T;
+  docnode_t *A,*N,*Z;
+  buffer_t *buf;
+
+  buf= buffer_new(1024);
+  for(A=doc->next;A!=doc;A=Z)
+  {
+    Z= A->next;
+    if (A->kind!='A') continue;
+    
+      for(N=A->next;N!=doc;N=N->next)
+         if (N->kind=='S') break;
+      if (N==doc)
+         exit(fprintf(stderr,"error near %s:%d: anchor isn't followed by a "
+                             "section heading.\n", A->fname, A->lno));
+      T.secnum= N->s_number;
+      T.lno= A->lno;
+      T.fname= A->fname;
+      T.name= A->a_txt;
+      T.node= N;
+      buffer_write(buf, &T, sizeof(T));
+      n_anchors++;
+
+     A->prev->next= A->next;
+     A->next->prev= A->prev;
+  }
+  buffer_free(buf, (void**) &anchors, NULL);
+  if (n_anchors)
+     qsort(anchors, n_anchors, sizeof(anchors[0]), anchor_compare);
+
+  for(i=0;i<n_anchors-1;i++)
+    if (!strcmp(anchors[i].name,anchors[i+1].name))
+       exit(fprintf(stderr,"multiple definition of anchor %s:\n" 
+                           " 1- near %s: %d\n",
+                           " 2- near %s: %d\n",
+                              anchors[i].name, 
+                         anchors[i].fname, anchors[i].lno,
+                         anchors[i+1].fname, anchors[i+1].lno));
+}
+
+int anchor_compare(const void *a, const void *b)
+{
+  const aanchor_t *A= a;
+  const aanchor_t *B= b;
+  return strcmp(A->name, B->name);
+}
+
+void print_anchors()
+{
+  int i;
+  printf("typedef struct { const char *name; int secno; } anchor_t; \n");
+  printf("static const anchor_t anchors[]= {\n");
+  for(i=0;i<n_anchors;i++)
+  {
+     printf("{ "); print_str(anchors[i].name); 
+                   printf(", %d },\n", anchors[i].secnum);
+  }
+  printf("};\n");
+}
+
+
+void parse_anchor()
+{
+  int i;
+  char *ach;
+  docnode_t *N;
+  remove_leading_spc(line);
+  if (line[0]!='[') 
+     exit(fprintf(stderr, "internal error at parse_anchor :1\n"));
+  remove_part(line,0,1);
+  remove_leading_spc(line);
+  ach= "anchor";
+  if (!strpfx(ach, line)) 
+     exit(fprintf(stderr, "internal error at parse_anchor :2\n"));
+  remove_part(line, 0, strlen(ach));
+  if (!skipspc(line,0))
+     exit(fprintf(stderr, "internal error at parse_anchor :3\n"));
+  remove_leading_spc(line);
+  for(i=0;line[i] && line[i]!=']';i++) ;
+     
+  if (!line[i]) 
+     exit(fprintf(stderr, "near %s: %d: unterminated anchor directive\n",
+                           file_name, line_number));
+  N= calloc(1,sizeof(*N));
+  N->kind= 'A';
+  N->a_txt= get_part(line, 0,i);
+  add_node(N);
+}
+
++.
+Outputting links is a more complicated matter. The thing is already in
+command form and consists of multiple elements. We need to process each
+element and see whether we can find the corresponding link.
+
+Link elements are a little bit special, they don't have sub-elements.
+The whole argument is placed inside the 'arg' field.
+
++ Private Functions
+
+void output_link(elt_t *linkel,docnode_t *ref)
+{
+  elt_t *E,*elts;
+  aanchor_t *A;
+  int font,style;
+  int start,end;
+  int q;
+  char *arg;
+  char *K,*L,*tgt;
+  buffer_t *B;
+
+  K= strstr(linkel->arg, "%{");
+  if (!K) K= strstr(linkel->arg,"%(");
+  if (!K) 
+     exit(fprintf(stderr,"link contains no target near %s:%d\n",
+                        ref->fname, ref->lno));
+
+  if (K[1]=='{') q='}'; else q=')';
+  for(L=K+2;L[0];L++)
+    if (L[0]==q) break;
+
+  if (!L[0])
+     exit(fprintf(stderr,"unterminated link target near %s:%d\n",
+                        ref->fname, ref->lno));
+
+  tgt= get_part(linkel->arg, K+2-linkel->arg, L-linkel->arg);
+  remove_all_spaces(tgt);
+  if (!tgt[0])
+     exit(fprintf(stderr,"empty link target near %s:%d\n",
+                        ref->fname, ref->lno));
+
+  A= find_target(tgt);
+  if (!A)
+     exit(fprintf(stderr,"can't find link target %s near %s:%d\n",
+                        tgt, ref->fname, ref->lno));
+
+  B= buffer_new(128);
+  buffer_write(B, linkel->arg, K-linkel->arg);
+  if (q!='}')
+    buffer_write(B, A->node->s_title, strlen(A->node->s_title));
+  buffer_write(B, L+1, strlen(L+1)+1);
+  buffer_free(B, (void**) &arg, NULL);
+
+  elts= parse_seq(arg, 0);
+  if (elts->next==elts) 
+     exit(fprintf(stderr,"empty link text near %s:%d\n",
+                           ref->fname, ref->lno));
+
+  inline_style("link", &style, &font);
+  start= seqlen;
+  for(E=elts->next;E!=elts;E=E->next)
+     output_elt(style, lookup_word(font, E->txt));
+  end= seqlen - 1;
+  record_decor(style, start, end);
+  record_link(start, end, A->secnum);
+}
+
++.
+Links are very similar to decorations. They are stored as integer triplets
+<start,end,secno>. We store these in a buffer and print them out if not
+empty.
+
++ Private Variables
+    buffer_t *linkbuf; int n_links;
++ Page Init
+    linkbuf= NULL; n_links= 0;
+
++ Private Functions
+
+void record_link(int start, int end, int num)
+{
+  if (!linkbuf) linkbuf= buffer_new(128);
+  buffer_write(linkbuf, &start, sizeof(start));
+  buffer_write(linkbuf, &end, sizeof(end));
+  buffer_write(linkbuf, &num, sizeof(num));
+  n_links++;
+}
+
+void print_links()
+{
+  unsigned int *L;
+  int i;
+  if (!linkbuf) { printf("  canvas->set_links(NULL,0);\n"); return ; }
+  buffer_free(linkbuf, (void**) &L, NULL);
+  printf("static const unsigned int links[]= {\n");
+  for(i=0;i<3*n_links;i++) printf("0x%x,", L[i]);
+  printf("};\n");
+  printf("  canvas->set_links(links, %d);\n", n_links);
+  free(L);
+  n_links= 0;
+  linkbuf= NULL;
+}
+
++.
+Now the most important part comes: actually finding the link target.
+
++ Private Functions
+
+aanchor_t *find_target(char *tgt)
+{
+  int i,j,k,R;
+  i= 0; j= n_anchors-1;
+  while(i<=j)
+  {
+     k= (i+j)/2; 
+     R= strcmp(anchors[k].name, tgt);
+     if (R<0) i= k+1;
+     else if (R>0) j= k-1;
+     else return anchors+k;
+  }
+  return NULL;
+}
+
++.
+
