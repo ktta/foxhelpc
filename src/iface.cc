@@ -29,6 +29,18 @@ static void follow_link(int linkno)
   help_window->update();
 }
 
+static void show_toc0(int dummy)
+{
+  cf_toc0(help_window);
+  help_window->update();
+}
+
+static void show_toc2(int dummy)
+{
+  cf_toc2(help_window);
+  help_window->update();
+}
+
 void help(const char *subject)
 {
   int i,j,k,R;

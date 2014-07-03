@@ -4,7 +4,7 @@ FOX_LIBS   {fox-config --libs}   #prgout
 
 
 {t-parse.u parse.u output.u wordlk.u tabout.u image.u page.u util.u
-           links.u }
+           links.u toc.u }
    t-parse.c #t2c
 
 t-parse.c #gcompile

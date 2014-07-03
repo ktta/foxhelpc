@@ -1527,6 +1527,9 @@ static const char *libcode=
 "using namespace FX;\n"
 "\n"
 "static void follow_link(int);\n"
+"static void show_toc2(int);\n"
+"static void show_toc0(int);\n"
+"\n"
 "\n"
 "FXDEFMAP(FYHelpWin) FYHelpWinMap[]=\n"
 "{\n"
@@ -1559,6 +1562,9 @@ static const char *libcode=
 "\n"
 "  new FXMenuTitle(bar,\042Chapters\042, NULL, chapters_pane);\n"
 "  sections_mtitle= new FXMenuTitle(bar,\042Sections\042, NULL, sections_pane);\n"
+"\n"
+"  new FYMenuCommand(bar, \042Contents\042, NULL, 0, show_toc2, 0);\n"
+"  new FYMenuCommand(bar, \042Full\042, NULL, 0, show_toc0, 0);\n"
 "\n"
 "  canvas= new FYGfxCanvas(vbox, FRAME_NORMAL | LAYOUT_FILL_X | LAYOUT_FILL_Y);\n"
 "  \n"
@@ -1771,6 +1777,7 @@ void output_link(elt_t *linkel,docnode_t *ref);
 void record_link(int start, int end, int num);
 void print_links();
 aanchor_t *find_target(char *tgt);
+void output_toc(int level);
 int lookup_word(int font, const char *str);
 char **get_word_list();
 
@@ -3464,6 +3471,55 @@ aanchor_t *find_target(char *tgt)
 }
 
 
+void output_toc(int level)
+{
+  docnode_t *N;
+  int font, style;
+  int start;
+  elt_t *E;
+
+  page_init();
+  inline_style("link", &style, &font);
+
+  for(N=doc->next;N!=doc;N=N->next)
+  {
+    if (N->kind!='S' || N->level<=level) continue;
+    start= seqlen;
+    output_elt(0,0); 
+    for(E=N->elts->next;E!=N->elts;E=E->next)
+    {
+      output_elt(style, lookup_word(font, E->txt));
+    }
+    record_decor(style, start+1, seqlen-1);
+    record_link(start+1, seqlen-1, N->s_number);
+    coprint("  canvas->bullet_println(%d, %d, %d);\n",
+                   4-N->level+1, start, seqlen-1);
+  }
+
+  printf("static void tf_toc%d(FYGfxCanvas* canvas) {\n",level);
+  print_table_coord_variables();
+  printf("canvas->reset_doc();\n");
+
+  print_command_buffer();
+
+  printf(" canvas->end_doc(tf_toc%d);\n",level);
+  printf("}\n");
+
+  printf("static void cf_toc%d(FYHelpWin *win) {\n",level);
+  printf("  FYGfxCanvas *canvas= win->canvas;\n");
+
+  print_seq_buffer();
+
+  print_bgrects();
+  print_imagedefs();
+  print_links();
+
+  printf("  static const sipair_t empty[]= { { NULL, 0 } };\n");
+  printf("  win->set_section_menu(empty);\n");
+  printf("  tf_toc%d(canvas);\n",level);
+  printf("}\n");
+}
+
 int lookup_word(int font, const char *str)
 {
    word_record_t *V;
@@ -3537,6 +3593,8 @@ int main(int argc,char **argv)
 
   print_section_menu_arrays();
   output_doc();
+  output_toc(2);
+  output_toc(0);
   print_init_words();
   print_link_table();
 puts(
@@ -3568,6 +3626,18 @@ puts(
 "  if (linkno<0 || linkno>=ltsize) return ;\n"
 "\n"
 "  (*(sections[linkno].func))(help_window);\n"
+"  help_window->update();\n"
+"}\n"
+"\n"
+"static void show_toc0(int dummy)\n"
+"{\n"
+"  cf_toc0(help_window);\n"
+"  help_window->update();\n"
+"}\n"
+"\n"
+"static void show_toc2(int dummy)\n"
+"{\n"
+"  cf_toc2(help_window);\n"
 "  help_window->update();\n"
 "}\n"
 "\n"

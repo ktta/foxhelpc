@@ -52,6 +52,9 @@ public:
 using namespace FX;
 
 static void follow_link(int);
+static void show_toc2(int);
+static void show_toc0(int);
+
 
 FXDEFMAP(FYHelpWin) FYHelpWinMap[]=
 {
@@ -84,6 +87,9 @@ FYHelpWin::FYHelpWin
 
   new FXMenuTitle(bar,"Chapters", NULL, chapters_pane);
   sections_mtitle= new FXMenuTitle(bar,"Sections", NULL, sections_pane);
+
+  new FYMenuCommand(bar, "Contents", NULL, 0, show_toc2, 0);
+  new FYMenuCommand(bar, "Full", NULL, 0, show_toc0, 0);
 
   canvas= new FYGfxCanvas(vbox, FRAME_NORMAL | LAYOUT_FILL_X | LAYOUT_FILL_Y);
   

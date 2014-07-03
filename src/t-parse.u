@@ -71,6 +71,8 @@ static void init_doc(FYHelpWin *win)
 
   print_section_menu_arrays();
   output_doc();
+  output_toc(2);
+  output_toc(0);
   print_init_words();
   print_link_table();
 puts(
