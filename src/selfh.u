@@ -1,0 +1,30 @@
++.
+This file provides help for the foxhelpc program. The help file is compiled
+foxhelpc itself. 
+
+> selfhelp.cc
+
+<./t-parse test.ref
+<
+
+extern "C" void show_help(void);
+
+
+void show_help(void)
+{
+  FXApp* app;
+  int argc; char *argv[2];
+
+  argv[0]= strdup("foxhelpc");
+  argv[1]= NULL;
+  argc= 1;
+
+  app= new FXApp("YAK", "KUT");
+  app->init(argc, argv);
+  app->create();
+  help(NULL);
+  app->run();
+  exit(1);
+}
+
++.

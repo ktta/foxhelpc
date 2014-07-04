@@ -22,6 +22,6 @@ pngdim.c #compile
 
 t-page {t-page.o } $FOX_LIBS #link.c++
 
-
-
+selfh.u selfhelp.cc #t2c
+selfh.cc { +triggers { t-parse test.ref } } #modify
 

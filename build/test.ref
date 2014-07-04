@@ -1,33 +1,3 @@
-==== Test Chapter
-
-Let's try making some example code:
-[code]
-  == section [red header]?
-[end]
-or code?
-
-Another try: now we do a list.
-- This is a good list
-- We will do it properly
-  -- by making it a nested
-- And unnested list
-I will make a test of [red [pLs]paren] vs. [ul [pRs]stuff]. Yeah.
-
-[table]
-  [+header0] [+header1] [+header2] .
-  [R+M_0_0]   [+M_0_1]   [+M_0_2] [+M_0_3] .
-  [3+M_1_0]                       [+M_1_3] .
-  [+M_2_0]   [C2+[red really long text which]]    [+M_2_3]  .
-  [+M_3_0]   [+M_3_1]   [+M_3_2] [+M_3_3] 
-[end]
-
-Here is an image:
-
-[image world.png]
-
-I don't know how it will work..
-
-
 ==== Fox Help Compiler
 
 This program generates C++ source files from help documents. These source
@@ -230,9 +200,9 @@ A reference is written as
       or  
   [pLs [link <text>%{name}<text>]]
 [end]
-In the first form, the name part
-is replaced by the section title of the target anchor. In the second form,
-the name part is simply removed. 
+In the first form, the name part is replaced by the section 
+title of the target anchor. In the second form, the name part is
+simply removed. 
 
 It's mandatory to provide some text in the second form, otherwise there would
 be nothing to tether the link to. There is no such restriction in the first
@@ -241,6 +211,21 @@ form.
 Here is an example link and its rendering:
 - [expr [link section %(fmt.images)]] 
 - [link section %(fmt.images)] 
+
+== Anchors
+
+You can use the [expr [anchor]] tag to name sections. Then you can use these
+names to make links. The syntax for an anchor is quite simple:
+[code]
+  [pLs [anchor <name>]]
+[end]
+There are some rules regarding the name:
+- All whitespace in the name is removed before it's processed.
+- There can't be two anchors with the same name.
+- Anchor names are case sensitive.
+
+The anchor tag has to precede a section title. Otherwise the compiler exits
+with an error.
 
 
 ==== C++ Interface to the Help System
@@ -252,5 +237,35 @@ void help(const char *subject);
 void help_setting_i(const char *key, int value);
 void help_setting_s(const char *key, const char *value);
 [end]
+
+
+==== Demo Chapter
+
+Let's try making some example code:
+[code]
+  == section [red header]?
+[end]
+or code?
+
+Another try: now we do a list.
+- This is a good list
+- We will do it properly
+  -- by making it a nested
+- And unnested list
+I will make a test of [red [pLs]paren] vs. [ul [pRs]stuff]. Yeah.
+
+[table]
+  [+header0] [+header1] [+header2] .
+  [R+M_0_0]   [+M_0_1]   [+M_0_2] [+M_0_3] .
+  [3+M_1_0]                       [+M_1_3] .
+  [+M_2_0]   [C2+[red really long text which]]    [+M_2_3]  .
+  [+M_3_0]   [+M_3_1]   [+M_3_2] [+M_3_3] 
+[end]
+
+Here is an image:
+
+[image world.png]
+
+I don't know how it will work..
 
 

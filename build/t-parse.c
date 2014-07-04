@@ -3570,9 +3570,83 @@ char **get_word_list()
 
 
 
+static void usage(char **argv)
+{
+   exit(fprintf(stderr,"usage: %s [-h"
+#ifdef SELFHELP
+"|-H"
+#endif
+      "|-f filename] input1 input2 .. \n",
+                        argv[0]));
+}
+
+static void shorthelp(char **argv)
+{
+  fprintf(stderr,"%s usage: \n", argv[0]);
+  fprintf(stderr,"  %s -h           shows this help screen\n", argv[0]);
+#ifdef SELFHELP
+  fprintf(stderr,"  %s -H           shows the full help document\n", argv[0]);
+#endif
+  fprintf(stderr,"  %s -f  name     creates a header file with the given name\n",argv[0]);
+  fprintf(stderr,"  %s input_file input_file .. \n"
+                 "                 compiles the given list of files  to stdout\n", argv[0]);
+  exit(1);
+}
+
+static void shift(int *argc, char** argv)
+{
+  int i;
+  for(i=1;i<*argc-1;i++) argv[i]= argv[i+1];
+  argv[i]= NULL;
+  (*argc)--;
+}
+
+static void write_header(char *fname)
+{
+  FILE *f;
+  f= fopen(fname, "w");
+  if (!f)
+     exit(fprintf(stderr,"can't open %s for writing: %s\n",
+                          fname, strerror(errno)));
+  fprintf(f,"void help(const char *anchor);\n");
+  fclose(f);
+}
+
+#ifdef SELFHELP
+extern void show_help();
+#endif
+
 int main(int argc,char **argv)
 {
-  parse_file(argv[1]);
+  int ninput;
+  if (argc<2)
+    usage(argv);
+
+  ninput= 0;
+  while(argc>1)
+  {
+    if (!strcmp(argv[1], "-h")) shorthelp(argv);
+#ifdef SELFHELP
+    if (!strcmp(argv[1], "-H")) show_help(); 
+#endif
+    if (!strcmp(argv[1],"-f"))
+    {
+      shift(&argc,argv);
+      if (argc<2) usage(argv);
+      write_header(argv[1]);
+      shift(&argc,argv);
+      continue; 
+    }
+    if (argv[1][0]=='-') usage(argv);
+    parse_file(argv[1]);
+    shift(&argc,argv);
+    ninput++;
+  }
+
+  if (!ninput) return 0;
+
+
+//  parse_file(argv[1]);
 //  print_docnodelist(doc);
   puts(libhdr); puts(libcode);
 
@@ -3645,6 +3719,7 @@ puts(
 "{\n"
 "  int i,j,k,R;\n"
 "  create_help_window(); \n"
+"  if (!subject) goto notfound;\n"
 "  i=0; j=sizeof(anchors)/sizeof(anchors[0])-1;\n"
 "  while(i<=j)\n"
 "  {\n"
@@ -3654,8 +3729,11 @@ puts(
 "     else if (R>0) j= k-1;\n"
 "     else break;\n"
 "  }\n"
-"  if (i>j) cf_0(help_window);\n"
+"  if (i>j) goto notfound;\n"
 "  (*sections[anchors[k].secno].func)(help_window);\n"
+"  return ;\n"
+"notfound:\n"
+"  cf_0(help_window);\n"
 "}\n"
 "\n"
 

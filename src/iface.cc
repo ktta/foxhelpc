@@ -45,6 +45,7 @@ void help(const char *subject)
 {
   int i,j,k,R;
   create_help_window(); 
+  if (!subject) goto notfound;
   i=0; j=sizeof(anchors)/sizeof(anchors[0])-1;
   while(i<=j)
   {
@@ -54,7 +55,10 @@ void help(const char *subject)
      else if (R>0) j= k-1;
      else break;
   }
-  if (i>j) cf_0(help_window);
+  if (i>j) goto notfound;
   (*sections[anchors[k].secno].func)(help_window);
+  return ;
+notfound:
+  cf_0(help_window);
 }
 

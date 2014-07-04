@@ -1,27 +1,57 @@
+# Makefile for the foxhelpc program. You can control this build by three
+# variables on the command line: SELF, STATIC and DBG.
+#
+# If SELF=1 is given on the command line, the resulting program will
+# recognize the -H switch and will contain the help document inside.
+# 
+# If STATIC=1 is given, then the resulting binary will be static.
+#
+# If DBG=1 is given a debug build is made. Otherwise -O2 is used for
+# optimizing the compilation 
+# 
 
-t-page: t-page.cc
-	g++ -o $@ t-page.cc `fox-config --cflags --libs`
+ifeq ($(STATIC),1)
+LFLAGS=-static -s 
+FOXLIBS=-lFOX-1.6 \
+  -lXft -lfontconfig -lexpat -lfreetype \
+  -lXcursor -lXrender -lXrandr -lXfixes -lXext \
+  -Wl,--start-group -lX11 -lXau -Wl,--end-group -ltiff -ljpeg \
+  -lpng -lbz2 -lz
+NOFOXLIBS=-lpng -lz
+else
+LFLAGS=
+FOXLIBS=`fox-config --libs`
+NOFOXLIBS=-lpng
+endif
 
-t-page.static: t-page.cc
-	g++ -static -s -o $@ t-page.cc `fox-config --cflags` -lFOX-1.6 \
-      -lXft -lfontconfig -lexpat -lfreetype \
-     -lXcursor -lXrender -lXrandr -lXfixes -lXext \
-     -Wl,--start-group -lX11 -lXau -Wl,--end-group -ltiff -ljpeg \
-     -lpng -lbz2 -lz
+ifeq ($(SELF),1)
+LIBS=$(FOXLIBS)
+S_FLAG=-DSELFHELP
+OBJS=foxhelpc.o selfhelp.o
+LINKER=g++
+else
+LIBS=$(NOFOXLIBS)
+S_FLAG=
+OBJS=foxhelpc.o
+LINKER=gcc
+endif
 
-foxhelpc: foxhelpc.c
-	gcc -o $@ foxhelpc.c -lpng -lz
+ifeq ($(DBG),1)
+DBGLINK=-g
+DBGCOM=-g
+else
+DBGLINK=
+DBGCOM=-O2
+endif
 
-foxhelpc.static: foxhelpc.c
-	gcc -static -s -o $@ foxhelpc.c -lpng -lz
+foxhelpc: $(OBJS)
+	$(LINKER) $(DBGLINK) $(LFLAGS) -o $@ $(OBJS) $(LIBS)
 
+foxhelpc.o: foxhelpc.c
+	gcc $(S_FLAG) $(DBGCOM) -c foxhelpc.c
 
-CFLAGS=-I../src -I../imports
-t-parse: t-parse.c buffer.o critbit.o ifile.o pngdim.o
-	gcc -o $@ -I../src/ -I../imports $^ -lpng
-
-ifile.o: ../src/ifile.c
-buffer.o: ../imports/buffer.o
-critbit.o: ../imports/critbit.c
-pngdim.o: ../src/pngdim.c
+ifeq ($(SELF),1)
+selfhelp.o: selfhelp.cc
+	g++ $(DBGCOM) -c `fox-config --cflags` selfhelp.cc
+endif
 
