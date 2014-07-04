@@ -4,7 +4,7 @@ foxhelpc itself.
 
 > selfhelp.cc
 
-<./t-parse test.ref
+<./t-parse self.ref test.ref
 <
 
 extern "C" void show_help(void);

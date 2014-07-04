@@ -4,7 +4,7 @@ t-parse and displays it on the canvas.
 
 > t-page.cc nolines
 
-<./t-parse test.ref
+<./t-parse test.ref self.ref
 <
 
 

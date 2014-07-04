@@ -16,12 +16,23 @@ t-parse.c { menuco.cc helpwin.cc canvas.cc iface.cc } #depends.here
 
 
 t-page.u t-page.cc #t2c
-t-page.cc { +triggers { t-parse test.ref } } #modify
+t-page.cc { +triggers { t-parse test.ref self.ref } } #modify
 t-page.cc {} $FOX_CFLAGS #gcompile.c++
 pngdim.c #compile
 
 t-page {t-page.o } $FOX_LIBS #link.c++
 
 selfh.u selfhelp.cc #t2c
-selfh.cc { +triggers { t-parse test.ref } } #modify
+selfh.cc { +triggers { t-parse test.ref self.ref } } #modify
 
+{
+  triggers { ../src/amal.cfg
+             ../build/t-parse.c
+             ../imports/buffer.c
+             ../imports/critbit.c
+             ../src/ifile.c
+             ../src/pngdim.c }
+  outputs  { ../build/foxhelpc.c }
+  action  { amalgam ../src/amal.cfg }
+  message  { amalgamation for foxhelpc.c }
+} #command

@@ -1,0 +1,240 @@
+==== Fox Help Compiler
+
+This program generates C++ source files from help documents. These source
+files then can be linked to your program to provide help functionality.
+
+The program is called [expr foxhelpc]. It is invoked with the list of
+document files to be compiled:
+
+[code]
+foxhelpc <input_file1> <input_file2> .. <input_fileN>
+[end]
+
+The generated code is printed to the standard output. 
+If there are any errors during the compilation, the compiler exits with
+an error message. Usually the line number given by the compiler will
+be incorrect but near the actual error. This is because the program
+is still in its early stages and can't track line numbers very well.
+
+There are some command line options as well:
+- [expr -h] displays copyright information and short command line help.
+- [expr -H] displays this document, using the FOX help system. You will
+  need an X display for this, naturally.
+- [expr -f <file>] creates a header file with the given name. If this
+  option isn't given, no header file is created.
+
+==== Document Syntax
+
+Each document is a simple text file with some mark-up. The following
+formatting features are available:
+ - Chapters, sections and two levels of sub-sections
+ - Links
+ - Lists
+ - Tables
+ - Images
+ - Verbatim text (for code or shell command sequences)
+ - Inline formatting
+ -- Text background and foreground colors
+ -- Underlines
+ -- Font families and sizes
+
+When you give multiple files to [expr foxhelpc], they are concatenated
+and processed as a single document.
+
+The document format is line oriented. Most commands (block commands)
+are recognized only when they are at the beginning of a line. 
+
+=== Chapters and Sections 
+
+The document recognized by foxhelpc is considered to be a book. The top
+level sections are chapters and are shown in the chapters menu. 
+
+In order to start a new chapter or a section, you need to give a section
+title. A section title starts with a number of '=' characters and is 
+followed by the title text. Four levels of section titles are recognized:
+[code]
+==== Chapter Title
+=== Section Title
+== Sub-section Title
+= Sub-sub-section Title
+[end]
+
+These titles must appear at the beginning of a line but leading whitespace
+is ignored.
+
+[red mention the relationship between links and sections.]
+
+=== Paragraphs
+
+Anything that isn't part of another directive is considered to be part of
+a paragraph.  A paragraph ends when a new directive starts at the next
+line or if the next line contains nothing but whitespace. Paragraphs
+are word wrapped when displayed.
+
+Inline formatting starting in a paragraph must end within the paragraph.
+Otherwise an error will be given by the compiler.
+
+=== Lists
+
+Only bullet lists are supported. A list starts with a dash at the beginning
+of a line. You can have multiple dashes in succession to indicate nested
+lists or lists with more indentation than the default.
+
+Here is an example:
+[code]
+- Top list first item
+-- Inner list first item
+-- Inner list second item
+- Top list second item
+- Top list third item
+[end]
+
+This will be rendered as:
+- Top list first item
+-- Inner list first item
+-- Inner list second item
+- Top list second item
+- Top list third item
+
+A list ends either with an empty line or when a new directive is found on
+the next line. If the text of a list item spans multiple lines, then the
+continuation lines must start with whitespace. Otherwise, the continuation
+line will be interpreted as the start of a new paragraph.
+
+=== Verbatim Text
+
+Verbatim text is a block of text which 
+ is not word wrapped 
+and preserves the space characters in it  when displayed. It's useful for
+displaying code sections or shell commands.
+
+A verbatim text block starts with one of these directives:
+- [pLs]code[pRs]
+- [pLs]shell[pRs]
+- [pLs]output[pRs]
+It continues until the [expr [end]] directive is seen.
+
+Text between these two lines are displayed verbatim but inline formatting
+is still recognized. The syntax for inline formatting in such a situation
+is the same as for normal inline formatting with one exception: all inline
+formatting directives must end on the line they started. 
+
+You can also change the directive characters for inline formatting. Normally
+"[" and "]" characters are used to indicate a formatting directive. However, 
+you can change this pair by giving it as an argument to the verbatim 
+directive. For instance, the following changes the directive characters to
+"<" and ">".
+
+[code]
+[pLs [code <>]]
+  for(i=0;<red i!=3>;i++)
+    printf("%d\n", i);
+[pLs [end]]
+[end]
+This is displayed as:
+[code <>]
+  for(i=0;<red i!=3>;i++)
+    printf("%d\n", i);
+[end]
+
+=== Tables
+
+This is perhaps the most complicated part of this document. In this system,
+tables are defined using cells and rows. You start a table with the [expr [table]] directive and then provide the data. The table ends when an [end] directive
+is encountered at the start of a line.
+
+Each row of data must be terminated with a lone '.' character, except for
+the last row. You can think of this character as a line feed.
+
+Each cell is enclosed between "[]" pairs and can contain both formatting
+information and data. These two are separated by a plus sign. All characters
+before the first plus sign (if any) in the cell are considered to be formatting
+information. The rest is cell data.
+
+The following formatting characters are supported:
+- L for left justification
+- C for center justification
+- R for right justification
+- a number for indicating column span
+
+Here is an example table:
+[code]
+[pLs [table]]
+  [pLs [L+Justification]] [pLs [L+Left]] [pLs [C+Center]] [pLs [R+Right]] .
+  [pLs [L+Column span]]   [pLs [+One]]   [pLs [2C+Two Centered]] .
+  [pLs [L+Inline format]] [pLs [None]] [pLs [+[red red item]]] [pLs [+[ul underlined item]]]
+[pLs [end]]
+[end]
+Here is how it's rendered:
+
+[table]
+    [L+Justification]  [L+Left]  [C+Center]  [R+Right]  .
+    [L+Column span]   [+One]             [2C+Two Centered] .
+    [L+Inline format] [None] [+[red red item]] [+[ul underlined item]]
+[end]
+
+[anchor fmt.images]
+=== Images
+
+Images in PNG format can be used with this program. It copies the given
+image file into the generated source file and uses that data at run time.
+Therefore the generated source code can get quite large.  The program
+doesn't decompress images but their C++ representation is as big as four
+or five times the original file.
+
+The directive to be used is [expr [image <filename>]]. The filename is
+interpreted relative to the directory of the document file.
+
+Note that images are always block elements, you can't have them as part
+of paragraphs or table cells.
+
+=== Links
+
+The help system supports cross references. A reference is always associated
+with a chapter, section or subsection. You can't refer to some text in the
+middle of a section.
+
+A reference is written as 
+[code]
+  [pLs [link <text>%(name)<text>]]
+      or  
+  [pLs [link <text>%{name}<text>]]
+[end]
+In the first form, the name part is replaced by the section 
+title of the target anchor. In the second form, the name part is
+simply removed. 
+
+It's mandatory to provide some text in the second form, otherwise there would
+be nothing to tether the link to. There is no such restriction in the first
+form.
+
+Here is an example link and its rendering:
+- [expr [link section %(fmt.images)]] 
+- [link section %(fmt.images)] 
+
+== Anchors
+
+You can use the [expr [anchor]] tag to name sections. Then you can use these
+names to make links. The syntax for an anchor is quite simple:
+[code]
+  [pLs [anchor <name>]]
+[end]
+There are some rules regarding the name:
+- All whitespace in the name is removed before it's processed.
+- There can't be two anchors with the same name.
+- Anchor names are case sensitive.
+
+The anchor tag has to precede a section title. Otherwise the compiler exits
+with an error.
+
+
+==== C++ Interface to the Help System
+
+The C++ interface is really simple. There are a couple of functions
+which hide all the complexity:
+[code]
+void help(const char *subject);
+void help_setting_i(const char *key, int value);
+void help_setting_s(const char *key, const char *value);
+[end]
+
