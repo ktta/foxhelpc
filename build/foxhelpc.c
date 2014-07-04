@@ -1,14 +1,65 @@
+/* This file is an amalgamation of several source files.
+   Please look for BEGIN FILE,END FILE and CONTINUE FILE
+   strings to browse contents of individual files contained
+   here. */
+/* BEGIN FILE ../build/t-parse.c */
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
-#include "ifile.h"
-#include "buffer.h"
-#include "critbit.h"
-#include "pngdim.h"
-
+/* BEGIN FILE ../src/ifile.h */
+#ifndef ifile_h_included
+#define ifile_h_included
+typedef struct ifile ifile_t;
+int ifile_open(ifile_t **Rf,char *name);
+int ifile_get_line(ifile_t *f,uint8_t **buffer, size_t *len,int nullterm);
+void ifile_close(ifile_t *f);
+int ifile_line_number(ifile_t *f);
+char *ifile_error(ifile_t* f);
+char *ifile_file_name(ifile_t* f);
+#endif
+/* END FILE ../src/ifile.h */
+/* CONTINUE FILE ../build/t-parse.c */
+/* BEGIN FILE ../imports/buffer.h */
+#ifndef _djgkjdioweoif_buffer_h_included
+#define _djgkjdioweoif_buffer_h_included
+typedef struct buffer buffer_t;
+#ifndef _BUFFER_PROTO
+#define _BUFFER_PROTO
+#endif
+_BUFFER_PROTO buffer_t *buffer_new(size_t blksize);
+_BUFFER_PROTO void buffer_free(buffer_t *B, void **Rd, size_t *Rl);
+_BUFFER_PROTO void buffer_collect(buffer_t *B, void **Rd, size_t *Rl);
+_BUFFER_PROTO void buffer_write(buffer_t *B, void *d, size_t l);
+#endif
+/* END FILE ../imports/buffer.h */
+/* CONTINUE FILE ../build/t-parse.c */
+/* BEGIN FILE ../imports/critbit.h */
+#ifndef CRITBIT_H_INCLUDED
+#define CRITBIT_H_INCLUDED
+#ifdef __cplusplus
+extern "C" {
+#endif
+typedef struct {
+  void *root;
+} strmap_t;
+strmap_t *strmap_new();
+void *strmap_find(strmap_t *map, char *key);
+void *strmap_insert(strmap_t *map, char *key,void *data);
+void *strmap_remove(strmap_t *map, char *key);
+void *strmap_destroy(strmap_t *map);
+#ifdef __cplusplus
+};
+#endif
+#endif
+/* END FILE ../imports/critbit.h */
+/* CONTINUE FILE ../build/t-parse.c */
+/* BEGIN FILE ../src/pngdim.h */
+char *get_png_dimensions(const char *fn, unsigned int *Rw, unsigned int *Rh);
+/* END FILE ../src/pngdim.h */
+/* CONTINUE FILE ../build/t-parse.c */
 static const char *libhdr=
 "#include <fx.h>\n"
 "#include <FXString.h>\n"
@@ -24,9 +75,7 @@ static const char *libhdr=
 "\n"
 "#define CELL_PAD 5\n"
 "\n"
-
 ;
-
 static const char *libcode=
 "/* The menu commands in FOX are designed for static menus. i.e. you\n"
 "   can\047t dynamically generate menu entries. Actually you can, but it\047s\n"
@@ -1621,10 +1670,7 @@ static const char *libcode=
 "  sections_pane->recalc();\n"
 "}\n"
 "\n"
-
 ;
-
-
 typedef struct elt {
   int kind;
   char *txt;
@@ -1632,66 +1678,49 @@ typedef struct elt {
   struct elt *children;
   struct elt *prev,*next;
 } elt_t;
-
-
 typedef struct vline {
   struct vline *next;
   elt_t *elts;
 } vline_t;
-
-
 typedef struct {
   int col, row, colspan;
   char *fmt; elt_t *seq;
 } cell_t;
-
-
 typedef struct docnode
 {
   int kind;
   struct docnode *prev,*next;
   elt_t *elts;
-  int level; // for sections and lists
-
-  int s_number;          // section number
-  char *s_title;         // section title
-  char *s_title_encoded; // above in encoded form, with quotes and everything.
-        // the following two are meaningful only for subsections.
-  int s_parentno;        // number of the parent section
-  int s_eltstart;        // the element number starting this subsection.
-
+// for sections and lists
+  int level;
+// section number
+  int s_number;
+// section title
+  char *s_title;
+// above in encoded form, with quotes and everything.
+  char *s_title_encoded;
+// the following two are meaningful only for subsections.
+// number of the parent section
+  int s_parentno;
+// the element number starting this subsection.
+  int s_eltstart;
   vline_t *vlines;
   char *vcmd;
-
   int t_ncells, t_nrows, t_ncols;
   cell_t *t_cells;
-
   int i_width, i_height;
   char *i_path;
-
-  char *a_txt;         // anchor text
-
+// anchor text
+  char *a_txt;
   int lno; char* fname;
 } docnode_t;
-
-
-
 typedef struct { int n_val; char *str; int* val; } word_record_t;
-
-
-
 typedef struct { int y1,y2; int x; } tricor_y;
-
-
-typedef struct imageref 
+typedef struct imageref
    { struct imageref *next; int number,width,height;
             char *path; } imageref_t;
-
-
-typedef struct { int secnum; char *name; int lno; char *fname; 
+typedef struct { int secnum; char *name; int lno; char *fname;
                  docnode_t *node; } aanchor_t;
-
-
 void parse_file(char *name);
 int read_line();
 void parse_top();
@@ -1748,7 +1777,7 @@ void print_page_functions(docnode_t *secstart);
 void output_node(docnode_t *N);
 void print_link_table();
 void print_section_menu(docnode_t *secstart);
-void output_table(int nrows,int ncols, int ncells, 
+void output_table(int nrows,int ncols, int ncells,
                   cell_t *cells,docnode_t *ref);
 const char *cell_just_func(char *fmt);
 void print_table_coord_variables();
@@ -1780,43 +1809,27 @@ aanchor_t *find_target(char *tgt);
 void output_toc(int level);
 int lookup_word(int font, const char *str);
 char **get_word_list();
-
 uint8_t *line;
 size_t line_len;
 int line_number;
 char *file_name;
 ifile_t *input;
-
   static int secnum;
-
-
 static docnode_t *doc;
 static char *classify_cmd;
-
     static int seqlen;
     static buffer_t *seqbuffer;
-
     static buffer_t *combuffer;
-
     static buffer_t *bgbuffer,*underbuffer,*verbox;
     static int nbg,nunder,nverbox;
-
-
 static strmap_t word_list;
 static int last_word;
-
-
 int n_table_row_lines, n_table_col_lines;
-
   static int inum;
-
     static imageref_t *imgs, **imgtail;
   char *chapter_menu;
-
   aanchor_t *anchors; int n_anchors;
-
     buffer_t *linkbuf; int n_links;
-
 void parse_file(char *name)
 {
   if (ifile_open(&input,name))
@@ -1826,7 +1839,6 @@ void parse_file(char *name)
   parse_top();
   ifile_close(input);
 }
-
 int read_line()
 {
   if (line) free(line); line= NULL;
@@ -1835,7 +1847,6 @@ int read_line()
   line_number= ifile_line_number(input);
   return 0;
 }
-
 void parse_top()
 {
  while(1)
@@ -1855,7 +1866,6 @@ void parse_top()
   if (read_line()) return ;
  }
 }
-
 int classify()
 {
   int i;
@@ -1881,7 +1891,6 @@ int classify()
   }
   return 'P';
 }
-
 void parse_section_header()
 {
   int i;
@@ -1891,38 +1900,32 @@ void parse_section_header()
   while(line[i]=='=') { i++; seclevel++; }
   remove_part(line, 0, i);
   normalize_spaces(line);
-  if (line[0]==0) 
+  if (line[0]==0)
     exit(fprintf(stderr, "near %s:%d: empty section header\n",
                           file_name, line_number));
   add_section(seclevel, line);
 }
-
-
 void normalize_spaces(uint8_t *str)
 {
   remove_leading_spc(str);
   remove_trailing_spc(str);
 }
-
 void remove_trailing_spc(uint8_t *str)
 {
   size_t L;
   L= strlen(str);
-  while(L>0 && ispc(str[L-1])) str[--L]= 0; 
+  while(L>0 && ispc(str[L-1])) str[--L]= 0;
 }
-
 void remove_part(uint8_t *str, int start, int end)
 {
   if (start<end)
      memmove(str+start, str+end, strlen(str+end)+1);
 }
-
 void parse_paragraph()
 {
   buffer_t *B;
   char *str;
   size_t len;
-
   B= buffer_new(128);
   while(1)
   {
@@ -1937,24 +1940,20 @@ void parse_paragraph()
   }
 done:
   buffer_write(B, "", 1);
-  buffer_free(B, (void**) &str, &len);  
+  buffer_free(B, (void**) &str, &len);
   normalize_spaces(str);
   add_paragraph(str);
   free(str);
 }
-
 int skipspc(uint8_t *str, int i)
 {
   while(ispc(str[i])) i++;
   return i;
 }
-
 int ispc(uint32_t K)
 {
   return (K>0 && K<=' ') || (K==127);
 }
-
-
 elt_t *parse_seq(uint8_t *str,int cmds)
 {
   int i,k;
@@ -1962,7 +1961,6 @@ elt_t *parse_seq(uint8_t *str,int cmds)
   elt_t *seq,*E;
   seq= malloc(sizeof(*seq));
   seq->prev= seq->next= seq;
-
 again:
   remove_leading_spc(str);
   if (str[0]==0) return seq;
@@ -1989,7 +1987,6 @@ done:
   remove_part(str, 0,i);
   E= calloc(1, sizeof(*E));
   E->kind= 'C';
-
   remove_part(cmd, 0,skipspc(cmd,0));
   if (cmd[0]==0) goto invalid;
   for(i=0;cmd[i] && !ispc(cmd[i]);i++) ;
@@ -2003,20 +2000,18 @@ done:
     free(cmd);
   }
   goto insert;
-
 insert:
   E->prev= seq->prev; E->next= seq;
   seq->prev->next= E; seq->prev= E;
   goto again;
 invalid:
-  fprintf(stderr,"near %s:%d: invalid command sequence\n", 
+  fprintf(stderr,"near %s:%d: invalid command sequence\n",
                   ifile_file_name(input), ifile_line_number(input));
   exit(1);
 unmatched:
-  fprintf(stderr,"near %s:%d: unmatched '['\n", 
+  fprintf(stderr,"near %s:%d: unmatched '['\n",
                   ifile_file_name(input), ifile_line_number(input));
   exit(1);
-
 normal_word:
   for(i=0;str[i] && !ispc(str[i]);i++)  ;
   E= calloc(1,sizeof(*E));
@@ -2025,8 +2020,6 @@ normal_word:
   replace_escape_seqs(E->txt);
   goto insert;
 }
-
-
 char *get_part(char *str, int start, int end)
 {
   char *T;
@@ -2037,7 +2030,6 @@ char *get_part(char *str, int start, int end)
   T[L]= 0;
   return T;
 }
-
 char *get_remove_part(char *x, int start, int end)
 {
   char *R;
@@ -2045,13 +2037,10 @@ char *get_remove_part(char *x, int start, int end)
   remove_part(x,start,end);
   return R;
 }
-
 void remove_leading_spc(char *x)
 {
   remove_part(x, 0,skipspc(x,0));
 }
-
-
 void print_docnode(docnode_t *N)
 {
   switch(N->kind)
@@ -2061,14 +2050,12 @@ void print_docnode(docnode_t *N)
             printf("]\n"); break;
   }
 }
-
 void print_docnodelist(docnode_t *head)
 {
   docnode_t *N;
   for(N=head->next;N!=head;N=N->next)
      print_docnode(N);
 }
-
 void print_seq(elt_t *E)
 {
   elt_t *X;
@@ -2077,7 +2064,7 @@ void print_seq(elt_t *E)
    switch(X->kind)
    {
    case 'W': printf("W(%s)", X->txt); break;
-   case 'C': printf("C(%s)", X->txt); 
+   case 'C': printf("C(%s)", X->txt);
              if (X->arg) printf("{%s}",X->arg);
              printf("[");
              if (X->children) print_seq(X->children);
@@ -2086,8 +2073,6 @@ void print_seq(elt_t *E)
    }
   }
 }
-
-
 void add_section(int level, char *txt)
 {
   docnode_t *N;
@@ -2106,7 +2091,6 @@ void add_paragraph(char *txt)
   N->elts= parse_seq(txt,1);
   add_node(N);
 }
-
 void add_node(docnode_t *N)
 {
   if (!doc)
@@ -2121,30 +2105,28 @@ void add_node(docnode_t *N)
   doc->prev->next= N;
   doc->prev= N;
 }
-
-
 void parse_verbatim()
 {
   int i;
   vline_t **tail,*VL,*first;
   char *quot;
   char *cmd;
-
   remove_leading_spc(line);
-  remove_part(line,0,1);  // skip the '['
-  for(i=0;line[i] && !ispc(line[i]);i++) ; // skip the command, it's already
-                                           // in classify_cmd
+// skip the '['
+  remove_part(line,0,1);
+// skip the command, it's already
+  for(i=0;line[i] && !ispc(line[i]);i++) ;
+// in classify_cmd
   remove_part(line, 0,i);
   cmd= strdup(classify_cmd);
   remove_leading_spc(line);
   if (line[0]==0 || line[0]==']' || line[1]==0) quot=strdup("[]");
   else { quot= strdup(line); quot[2]=0; }
-
   first= NULL;
   tail= &first;
   while(1)
   {
-    if (read_line()) 
+    if (read_line())
        exit(fprintf(stderr,"near %s:%d: unexpected end of file in verbatim\n",
                                file_name, line_number));
     if (classify()=='Z') break;
@@ -2154,12 +2136,10 @@ void parse_verbatim()
     *tail= VL;
     tail= &VL->next;
   }
-  read_line(); // skip the 'Z' line.
-
+// skip the 'Z' line.
+  read_line();
   add_verbatim(cmd, first);
 }
-
-
 void add_verbatim(char *cmd, vline_t *V)
 {
   docnode_t *N;
@@ -2169,8 +2149,6 @@ void add_verbatim(char *cmd, vline_t *V)
   N->kind= 'V';
   add_node(N);
 }
-
-
 elt_t *parse_verbatim_line(char *x,char *quot)
 {
   int i;
@@ -2179,12 +2157,9 @@ elt_t *parse_verbatim_line(char *x,char *quot)
   seq= malloc(sizeof(*seq));
   seq->prev= seq->next= seq;
   s= x;
-
 again:
   if (*x==0 || *x=='\n') goto done;
-
   for(s=x;s[0]!=0 && s[0]!='\n' && s[0]!=quot[0];s++)  ;
-  
   if (s!=x)
   {
      E= seq_add_elt(seq, 'W');
@@ -2192,34 +2167,29 @@ again:
      goto again;
   }
   if (s[0]!=quot[0]) goto done;
-
-  remove_part(x,0,1); // remove the quot character
+// remove the quot character
+  remove_part(x,0,1);
   remove_leading_spc(x);
   for(i=0;x[i]!=quot[1] && x[i]!=0 && !ispc(x[i]);i++) ;
-
   E=seq_add_elt(seq, 'C');
   E->txt= get_remove_part(x, 0, i);
-  if (E->txt[0]==0) 
+  if (E->txt[0]==0)
       exit(fprintf(stderr,"near %s:%d: empty command in verbatim\n",
                            file_name, line_number));
   E->children= malloc(sizeof(E->children[0]));
   E->children->prev= E->children->next= E->children;
-
   remove_leading_spc(x);
   for(i=0;x[i]!=quot[1] && x[i]!=0 && x[i]!='\n';i++) ;
   if (x[i]=='\n' || x[i]==0)
       exit(fprintf(stderr,"near %s:%d: unterminated command in verbatim\n",
                            file_name, line_number));
-  
   E= seq_add_elt(E->children, 'W');
   E->txt= get_part(x,0,i);
   remove_part(x, 0,i+1);
   goto again;
-
 done:
   return seq;
 }
-
 elt_t *seq_add_elt(elt_t *head, int kind)
 {
   elt_t *E;
@@ -2229,8 +2199,6 @@ elt_t *seq_add_elt(elt_t *head, int kind)
   head->prev->next= E; head->prev= E;
   return E;
 }
-
-
 void parse_list()
 {
   int i;
@@ -2238,23 +2206,19 @@ void parse_list()
   buffer_t *B;
   char *str;
   size_t len;
-
   remove_leading_spc(line);
   for(level=0;line[level]=='-';level++)
     ;
   remove_part(line,0,level);
   remove_leading_spc(line);
-  if (line[0]==0) 
+  if (line[0]==0)
   {
     read_line();
     return ;
   }
-  
   if (level==0) level= 1;
   if (level>5)  level= 5;
-
   B= buffer_new(128);
-
   while(1)
   {
     buffer_write(B, line, strlen(line));
@@ -2269,12 +2233,11 @@ void parse_list()
   }
 done:
   buffer_write(B, "", 1);
-  buffer_free(B, (void**) &str, &len);  
+  buffer_free(B, (void**) &str, &len);
   normalize_spaces(str);
   add_list(level,str);
   free(str);
 }
-
 void add_list(int level,char *txt)
 {
   docnode_t *N;
@@ -2284,8 +2247,6 @@ void add_list(int level,char *txt)
   N->level= level;
   add_node(N);
 }
-
-
 static int escape_seq(char *str)
 {
   if (strpfx("[pLs]",str)) return '[';
@@ -2294,7 +2255,6 @@ static int escape_seq(char *str)
   if (strpfx("[pRr]",str)) return ')';
   return 0;
 }
-
 static void replace_escape_seqs(char *str)
 {
   int i,k;
@@ -2302,16 +2262,15 @@ static void replace_escape_seqs(char *str)
   {
     k= escape_seq(str);
     if (k)
-    { 
+    {
       for(i=0;str[i];i++) if (str[i]==']') break;
       if (!str[i]) return ;
       remove_part(str,1,i+1);
       str[0]= k;
     }
     str++;
-  } 
+  }
 }
-
 int strpfx(char *pfx, char *k)
 {
   int i;
@@ -2319,15 +2278,12 @@ int strpfx(char *pfx, char *k)
     if (k[i]!=pfx[i]) return 0;
   return 1;
 }
-
-
 void parse_table()
 {
   buffer_t *B;
   char *str;
   size_t len;
   int start_lno;
-
   start_lno= line_number;
   B= buffer_new(128);
 again:
@@ -2341,31 +2297,27 @@ again:
   buffer_write(B, line, strlen(line));
   buffer_write(B, " ", 1);
   goto again;
-
 done:
   buffer_write(B, "", 1);
-  buffer_free(B, (void**) &str, &len);  
+  buffer_free(B, (void**) &str, &len);
   parse_table_content(str);
   free(str);
 }
-
 void parse_table_content(char *str)
 {
   buffer_t *cb;
-  cell_t C; 
+  cell_t C;
   docnode_t *N;
   int i,k;
   char *cellstr;
-
   int ncells, nrows, ncols, col;
   cb= buffer_new(128);
   ncells= nrows= ncols= col= 0;
-
 again:
   remove_leading_spc(str);
   if (str[0]==0) goto done;
   if (str[0]=='.') { nrows++; col= 0; remove_part(str,0,1); goto again; }
-  if (str[0]!='[') 
+  if (str[0]!='[')
      exit(fprintf(stderr,"near %s:%d: garbage within table data\n",
                          file_name,line_number));
   i= 1;
@@ -2377,7 +2329,7 @@ next:
   case 0: exit(fprintf(stderr,"near %s:%d: unterminated table entry\n",
                           file_name, line_number));
   case '[': k++; i++; goto next;
-  case ']': k--; if (k==0) goto found; 
+  case ']': k--; if (k==0) goto found;
   default: i++; goto next;
   }
 found:
@@ -2408,7 +2360,6 @@ done:
   N->t_ncols= ncols;
   add_node(N);
 }
-
 static int get_numeric(char *txt, int V)
 {
   int i,j;
@@ -2422,9 +2373,6 @@ static int get_numeric(char *txt, int V)
   free(z);
   return V;
 }
-
-
-
 void section_style(int level, int *style, int *font)
 {
   if (level>4) level= 4;
@@ -2432,7 +2380,6 @@ void section_style(int level, int *style, int *font)
   *font= level;
   *style= level;
 }
-
 void inline_style(char *cmd, int *Rstyle, int *Rfont)
 {
   int fg, bg, font,ul;
@@ -2455,14 +2402,9 @@ void inline_style(char *cmd, int *Rstyle, int *Rfont)
     ul= 1;
     fg= 3;
   }
-  
   *Rfont= font;
   *Rstyle= (ul<<24) | (bg<<16) | (fg<<8) | font;
 }
-
-
-
-
 void print_str(unsigned char *x)
 {
   printf("\"");
@@ -2475,7 +2417,6 @@ again:
 done:
   printf("\"");
 }
-
 void output_seq(int default_style, elt_t *head,docnode_t *ref)
 {
   unsigned int style, font;
@@ -2483,7 +2424,7 @@ void output_seq(int default_style, elt_t *head,docnode_t *ref)
   int cbegin, cend;
   for(E=head->next;E!=head;E=E->next)
   {
-    if (E->kind=='W') 
+    if (E->kind=='W')
     {
       output_elt(default_style, lookup_word(default_style&0xff, E->txt));
       continue;
@@ -2498,8 +2439,6 @@ void output_seq(int default_style, elt_t *head,docnode_t *ref)
     record_decor(style, cbegin, cend);
   }
 }
-
-
 void output_verbatim(char *cmd, vline_t *VL)
 {
   char buf[2000];
@@ -2508,23 +2447,23 @@ void output_verbatim(char *cmd, vline_t *VL)
   int bs, be;
   verbatim_style(cmd, &def_style, &def_font);
   bs= seqlen;
-
   coprint("  canvas->verbatim_vspace();\n");
   for(;VL;VL=VL->next)
   {
      elt_t *E;
      int st,en;
-     if (VL->elts->next==VL->elts) { // empty line 
+// empty line
+     if (VL->elts->next==VL->elts) {
          coprint("  canvas->pbreak();\n");
          continue;
-     } 
+     }
      st= seqlen;
      for(E=VL->elts->next;E!=VL->elts;E=E->next)
      {
-       if (E->kind=='W') 
+       if (E->kind=='W')
        {
          output_elt( def_style, lookup_word(def_font, E->txt));
-         continue;      
+         continue;
        }
        verbatim_inline_style(E->txt, &style, &font);
        if (E->children->next==E->children) continue;
@@ -2540,13 +2479,11 @@ void output_verbatim(char *cmd, vline_t *VL)
   if (bs<=be)
      record_decor_entry(&verbox, &nverbox, bs, be, (def_style>>16)&0xff);
 }
-
 void verbatim_style(char *cmd, int *style, int *font)
 {
   *font= 6;
   *style= *font | (2<<16) ;
 }
-
 void verbatim_inline_style(char *cmd,int *Rstyle, int *Rfont)
 {
   int fg, bg, font,ul;
@@ -2565,12 +2502,9 @@ void verbatim_inline_style(char *cmd,int *Rstyle, int *Rfont)
     ul= 1;
     fg= 3;
   }
-  
   *Rfont= font;
   *Rstyle= (ul<<24) | (bg<<16) | (fg<<8) | font;
 }
-
-
 void output_list(docnode_t *N)
 {
   int start;
@@ -2580,13 +2514,10 @@ void output_list(docnode_t *N)
   coprint("  canvas->bullet_println(%d, %d, %d);\n",
                  N->level, start, seqlen-1);
 }
-
-
 void print_init_words()
 {
   char **words;
   int nw;
-
   words=get_word_list();
   printf("static void init_words(FYGfxCanvas *canvas) {\n");
   printf("static const char *words[]={\n");
@@ -2595,52 +2526,36 @@ void print_init_words()
   printf("  canvas->set_words(words,%d);\n",nw);
   printf("}\n");
 }
-
 void page_init()
 {
     seqlen= 0; seqbuffer= buffer_new(128);
-
     combuffer= buffer_new(1024);
-
     nbg= nunder= nverbox= 0;
     bgbuffer= underbuffer= verbox= NULL;
-
    n_table_row_lines= n_table_col_lines= 0;
-
-    inum= 0;  
-
-    imgs= NULL; imgtail= &imgs; 
-
+    inum= 0;
+    imgs= NULL; imgtail= &imgs;
     linkbuf= NULL; n_links= 0;
-
 }
-
-
 void output_elt(int style, int word)
 {
   buffer_write(seqbuffer, &style, sizeof(style));
   buffer_write(seqbuffer, &word, sizeof(word));
   seqlen++;
 }
-
 void print_seq_buffer()
 {
   uint32_t *seq;
   int i;
-
-  buffer_free(seqbuffer, (void**) &seq, NULL); 
-
+  buffer_free(seqbuffer, (void**) &seq, NULL);
   printf("static const unsigned int seq[]={\n");
   for(i=0;i<seqlen*2;i++) printf("0x%x,", seq[i]);
   printf("};\n");
-
   printf("  canvas->set_elts(seq,%d);\n", seqlen);
   seqbuffer= NULL;
   seqlen= 0;
   free(seq);
 }
-
-
 void print_command_buffer()
 {
   char *com;
@@ -2650,7 +2565,6 @@ void print_command_buffer()
   free(com);
   combuffer= NULL;
 }
-
 void coprint(const char *fmt, ...)
 {
   char buf[2000];
@@ -2661,22 +2575,18 @@ void coprint(const char *fmt, ...)
   va_end(ap);
   buffer_write(combuffer, buf, strlen(buf));
 }
-
-
 void print_bgrects()
 {
   print_decor("bgrects", "set_bgrects", &bgbuffer, &nbg);
   print_decor("underlines", "set_underlines", &underbuffer, &nunder);
   print_decor("verboxes", "set_vboxes", &verbox, &nverbox);
 }
-
 void print_decor(char *varname, char *method, buffer_t **Rbuffer, int *Rn)
 {
   buffer_t *buffer;
   int n;
   unsigned int *B;
   int i;
-
   buffer= *Rbuffer;
   n= *Rn;
   if (!n)
@@ -2684,7 +2594,6 @@ void print_decor(char *varname, char *method, buffer_t **Rbuffer, int *Rn)
      printf("  canvas->%s(NULL, 0);\n", method);
      return ;
   }
-
   buffer_free(buffer, (void**) &B, NULL);
   *Rbuffer= NULL;
   *Rn= 0;
@@ -2694,17 +2603,13 @@ void print_decor(char *varname, char *method, buffer_t **Rbuffer, int *Rn)
   printf("  canvas->%s(%s, %d);\n", method, varname,n);
   free(B);
 }
-
-
 void record_decor(int style, int cbegin, int cend)
 {
   if ((style>>16) &0xff)
      record_decor_entry(&bgbuffer, &nbg, cbegin, cend, (style>>16)&0xff);
-
   if ((style>>24) &1)
      record_decor_entry(&underbuffer, &nunder, cbegin, cend, (style>>8)&0xff);
 }
-
 void record_decor_entry(buffer_t **Rbuffer, int *N, int B,int E, int C)
 {
    buffer_t *buf;
@@ -2716,8 +2621,6 @@ void record_decor_entry(buffer_t **Rbuffer, int *N, int B,int E, int C)
    (*N)++;
    *Rbuffer= buf;
 }
-
-
 void output_doc()
 {
   docnode_t *N,*secstart;
@@ -2726,65 +2629,50 @@ void output_doc()
   int bg,font;
   int i;
   unsigned int style;
-
   check_first_node();
-
   N= doc->next;
 next_page:
   secstart= N;
   if (N==doc) return ;
   page_init();
-
 next_node:
-
   if (N->kind=='S' && N!=secstart && N->level>2)
   {
-    // page ends here.
+// page ends here.
     goto print_stuff;
   }
-
   if (N->kind=='S' && N!=secstart)
   {
     N->s_eltstart= seqlen;
     N->s_parentno= secstart->s_number;
   }
-  
-  // do the regular outputting.
+// do the regular outputting.
   output_node(N);
   N= N->next;
   if (N==doc) goto print_stuff;
   goto next_node;
-
 print_stuff:
   print_page_functions(secstart);
   goto next_page;
 }
-
 void print_page_functions(docnode_t *secstart)
 {
   printf("static void tf_%d(FYGfxCanvas* canvas) {\n",secstart->s_number);
   print_table_coord_variables();
   printf("canvas->reset_doc();\n");
-
   print_command_buffer();
-
   printf(" canvas->end_doc(tf_%d);\n",secstart->s_number);
   printf("}\n");
-
   printf("static void cf_%d(FYHelpWin *win) {\n",secstart->s_number);
   printf("  FYGfxCanvas *canvas= win->canvas;\n");
-
   print_seq_buffer();
-
   print_bgrects();
   print_imagedefs();
   print_links();
-
   print_section_menu(secstart);
   printf("  tf_%d(canvas);\n",secstart->s_number);
   printf("}\n");
 }
-
 void output_node(docnode_t *N)
 {
   elt_t *E,*Z;
@@ -2792,7 +2680,6 @@ void output_node(docnode_t *N)
   int bg,font;
   int i;
   unsigned int style;
-
   switch(N->kind)
   {
   case 'S': font= N->level;
@@ -2803,7 +2690,7 @@ void output_node(docnode_t *N)
               output_elt(style, lookup_word(font, E->txt));
             coprint("  canvas->println(%d,%d);\n", start,seqlen-1);
             break;
-  case 'P': 
+  case 'P':
             coprint("  canvas->pbreak();\n");
             start= seqlen;
             output_seq(0,N->elts,N);
@@ -2812,12 +2699,10 @@ void output_node(docnode_t *N)
   case 'I': output_image(N); break;
   case 'L': output_list(N); break;
   case 'V': output_verbatim(N->vcmd, N->vlines); break;
-  case 'T': output_table(N->t_nrows, N->t_ncols, 
+  case 'T': output_table(N->t_nrows, N->t_ncols,
                          N->t_ncells, N->t_cells,N); break;
   }
 }
-
-
 void print_link_table()
 {
   docnode_t *N;
@@ -2833,40 +2718,32 @@ void print_link_table()
   }
   printf("};\n");
 }
-
-
 void print_section_menu(docnode_t *secstart)
 {
   docnode_t *N;
   if (secstart->kind!='S') return ;
-
-  if (secstart->level==4) 
+  if (secstart->level==4)
   {
      printf("  win->set_section_menu(secmen_%d);\n",secstart->s_number);
      return ;
   }
-
-  if (secstart->level!=3) return ; // this should never happen
-
+// this should never happen
+  if (secstart->level!=3) return ;
   for(N=secstart->prev;N!=doc;N=N->prev)
     if (N->kind=='S' && N->level==4) break;
   if (N==doc) return ;
-
   printf("  win->set_section_menu(secmen_%d);\n",N->s_number);
 }
-
-void output_table(int nrows,int ncols, int ncells, 
+void output_table(int nrows,int ncols, int ncells,
                   cell_t *cells,docnode_t *ref)
 {
   int i,j,N,K;
   int *Estart, *Eend;
   int s,sr, er;
   coprint(" /// BEGIN TABLE \n {\n");
-
-  // define width and height
+// define width and height
   Estart= malloc(sizeof(int)*ncells);
   Eend= malloc(sizeof(int)*ncells);
-
   for(i=0;i<ncells;i++)
   {
     Estart[i]= seqlen;
@@ -2876,18 +2753,15 @@ void output_table(int nrows,int ncols, int ncells,
     coprint("  canvas->get_seq_metrics(%d,%d, &cw%d, &ch%d, &ca%d);\n",
                       Estart[i], Eend[i], i,i,i);
   }
-
   for(i=0;i<nrows;i++)
     coprint(" int rh%d=0, ra%d=0;\n", i,i);
-
   for(i=0;i<nrows;i++)
     for(j=0;j<ncells;j++)
       if (cells[j].row==i)
          coprint("  rh%d= max_i(rh%d, ch%d); ra%d= max_i(ra%d, ca%d);\n",
                        i, i, j, i, i, j );
   for(i=0;i<ncols;i++) coprint("  int cow%d=0;\n", i);
-
-  for(i=0;i<ncols;i++) 
+  for(i=0;i<ncols;i++)
     for(j=0;j<ncells;j++)
        if (cells[j].colspan==1 && cells[j].col==i)
           coprint("  cow%d= max_i(cow%d, cw%d);\n", i,i,j);
@@ -2916,10 +2790,8 @@ void output_table(int nrows,int ncols, int ncells,
                                       i, i-1, i-1);
   for(i=1;i<=ncols;i++) coprint("  cp%d= cp%d + 2*CELL_PAD + cow%d;\n",
                                       i, i-1, i-1);
-
   coprint("  int off_x= canvas->get_width() - cp%d;\n", ncols);
   coprint("  if (off_x<0) off_x= 0; else off_x/= 2;\n");
-
   for(i=0;i<ncells;i++)
     coprint("  canvas->%s(off_x+cp%d+CELL_PAD, off_x+cp%d-CELL_PAD, "
             "rp%d+CELL_PAD, rh%d, ra%d, %d, %d);\n",
@@ -2931,20 +2803,14 @@ void output_table(int nrows,int ncols, int ncells,
                          cells[i].row,
                                Estart[i],
                                    Eend[i]);
-
   coprint("  int off_y= canvas->get_cursor_y();\n");
-
   table_draw_row_lines(nrows, ncols);
   table_draw_col_lines(nrows, ncols, ncells, cells);
   coprint("  canvas->xcoord(cp%d+3);\n", ncols);
-
   coprint("  canvas->advance_y(rp%d+2);\n", nrows);
   coprint(" /// END TABLE \n }\n");
   free(Estart); free(Eend);
 }
-
-
-
 const char *cell_just_func(char *fmt)
 {
   if (!fmt) return "cell_left";
@@ -2952,8 +2818,6 @@ const char *cell_just_func(char *fmt)
   if (strchr(fmt,'C')) return "cell_center";
   return "cell_left";
 }
-
-
 void print_table_coord_variables()
 {
   if (n_table_row_lines)
@@ -2965,8 +2829,6 @@ void print_table_coord_variables()
   else
     printf(" canvas->get_col_lines(0); \n");
 }
-
-
 void table_draw_row_lines(int nrows, int ncols)
 {
   int i,N;
@@ -2976,42 +2838,36 @@ void table_draw_row_lines(int nrows, int ncols)
     coprint("  TL_ROW[%d]= off_y+rp%d; "
               "TL_ROW[%d]= off_x+cp%d; "
               "TL_ROW[%d]= off_x+cp%d;\n",
-                    3*N, i,       
+                    3*N, i,
                     3*N+1, 0,
                     3*N+2,  ncols);
     n_table_row_lines++;
   }
 }
-
-
 void table_draw_col_lines(int nrows, int ncols, int ncells, cell_t *cells)
 {
   int i,j, s, sr,er,N;
   tricor_y *TA;
   int nT;
-
   TA= malloc(sizeof(*TA)*(ncols+1)*(nrows+1));
   nT= 0;
-
   i= -1;
 nextcol:
   i++;
   if (i>ncols) goto donecol;
-
   s= 0;
   sr= 0;
 nextseg:
   for(j=s;j<ncells;j++)
-    if (i>cells[j].col && i<cells[j].col+cells[j].colspan) 
+    if (i>cells[j].col && i<cells[j].col+cells[j].colspan)
        break;
   if (j==ncells) er= nrows;
      else        er= cells[j].row;
-
   if (sr!=er)
   {
     TA[nT].y1= sr;
     TA[nT].y2= er;
-    TA[nT].x=  i; 
+    TA[nT].x=  i;
     nT++;
   }
   if (j==ncells) goto nextcol;
@@ -3026,30 +2882,25 @@ donecol:
     coprint("  TL_COL[%d]= off_y+rp%d; "
               "TL_COL[%d]= off_y+rp%d; "
               "TL_COL[%d]= off_x+cp%d;\n",
-                  3*N, TA[i].y1,       
-                  3*N+1, TA[i].y2, 
+                  3*N, TA[i].y1,
+                  3*N+1, TA[i].y2,
                   3*N+2, TA[i].x );
     n_table_col_lines++;
   }
   free(TA);
 }
-
-
 void sort_tricor_y(tricor_y *A, int n)
 {
   qsort(A, n, sizeof(A[0]), compar_tricor_y);
 }
-
 int compar_tricor_y(const void *A, const void *B)
 {
   const tricor_y *a= A, *b= B;
   int r;
   r= a->y1 - b->y1; if (r) return r;
   r= a->y2 - b->y2; if (r) return r;
-  return a->x  - b->x;  
+  return a->x  - b->x;
 }
-
-
 void parse_image()
 {
   char *cmd,*e;
@@ -3074,7 +2925,6 @@ void parse_image()
                         "for image %s: %s\n", N->i_path,e));
   add_node(N);
 }
-
 char *relapath(char *base, char *name)
 {
   int L;
@@ -3088,8 +2938,6 @@ char *relapath(char *base, char *name)
   free(base);
   return strdup(buf);
 }
-
-
 void print_image_file(int num, char *path)
 {
   FILE *f;
@@ -3108,12 +2956,9 @@ void print_image_file(int num, char *path)
   printf("\n};\n");
   fclose(f);
 }
-
-
 void output_image(docnode_t *N)
 {
   imageref_t *R;
-
   R= malloc(sizeof(*R));
   R->number= inum++;
   R->path= N->i_path;
@@ -3122,31 +2967,24 @@ void output_image(docnode_t *N)
   R->height= N->i_height;
   *imgtail= R;
   imgtail= &R->next;
-
   coprint("  canvas->image(%d);\n",R->number);
 }
-
 void print_imagedefs()
 {
   imageref_t *R;
-
   if (!inum)
   {
     printf("  canvas->set_images(NULL,0);\n");
     return ;
   }
-
   for(R=imgs;R;R=R->next)
      print_image_file(R->number, R->path);
-
   printf("  static imagedef_t images[]= {\n");
   for(R=imgs;R;R=R->next)
      printf(" {%d, %d, img%ddata},\n", R->width, R->height, R->number);
   printf("};\n");
   printf("  canvas->set_images(images, %d);\n",inum);
 }
-
-
 void get_chapter_menu()
 {
   docnode_t *N;
@@ -3154,7 +2992,7 @@ void get_chapter_menu()
   buf= buffer_new(1024);
   for(N=doc->next;N!=doc;N=N->next)
     if (N->kind=='S' && N->level==4)
-      buffer_printv(buf,'s', " win->menu_add_chapter(", 
+      buffer_printv(buf,'s', " win->menu_add_chapter(",
                         's', N->s_title_encoded,
                         's', ", ",
                         'I', N->s_number,
@@ -3162,23 +3000,17 @@ void get_chapter_menu()
   buffer_write(buf, "",1);
   buffer_free(buf, (void**) &chapter_menu, NULL);
 }
-
-
 void check_first_node()
 {
   docnode_t* N;
   N= doc->next;
-
   if (N->kind!='S' || N->level!=4)
     exit(fprintf(stderr,"Document contains text without a chapter "
                         "header at the very start. Aborting.\n"));
 }
-
-
 void calculate_section_titles()
 {
   docnode_t *N;
-
   for(N=doc->next;N!=doc;N=N->next)
     if (N->kind=='S')
     {
@@ -3186,14 +3018,11 @@ void calculate_section_titles()
       N->s_title_encoded= encode_str(N->s_title);
     }
 }
-
-
 char *collect_seq_str(elt_t *elts)
 {
   buffer_t *B;
   char *str;
   elt_t *E;
-
   B= buffer_new(128);
   for(E=elts->next;E!=elts;E=E->next)
   {
@@ -3204,9 +3033,6 @@ char *collect_seq_str(elt_t *elts)
   buffer_free(B, (void**) &str, NULL);
   return str;
 }
-
-
-
 void print_section_menu_arrays()
 {
   docnode_t *N;
@@ -3223,18 +3049,15 @@ void print_section_menu_arrays()
                break;
        case 3: printf("{%s, %d},\n", N->s_title_encoded, N->s_number);
                break;
-    } 
+    }
   }
   if (st) printf("{NULL, 0} };\n");
 }
-
-
 void buffer_printv(buffer_t *buffer, int fmt, ...)
 {
   int iarg; char *sarg; char buf[30];
   va_list ap;
   va_start(ap,fmt);
-
   while(fmt!=0)
   {
     switch(fmt)
@@ -3253,13 +3076,11 @@ void buffer_printv(buffer_t *buffer, int fmt, ...)
 done:
   va_end(ap);
 }
-
 unsigned char *encode_str(unsigned char *src)
 {
   char *buf;
   int len,i;
   buf= NULL;
-
 again:
   len= 1;
   for(i=0;src[i];i++)
@@ -3272,7 +3093,6 @@ again:
   buf[0]= '"';
   goto again;
 }
-
 void remove_all_spaces(unsigned char *z)
 {
   unsigned char *t;
@@ -3285,13 +3105,11 @@ void collect_anchors()
   aanchor_t T;
   docnode_t *A,*N,*Z;
   buffer_t *buf;
-
   buf= buffer_new(1024);
   for(A=doc->next;A!=doc;A=Z)
   {
     Z= A->next;
     if (A->kind!='A') continue;
-    
       for(N=A->next;N!=doc;N=N->next)
          if (N->kind=='S') break;
       if (N==doc)
@@ -3304,31 +3122,27 @@ void collect_anchors()
       T.node= N;
       buffer_write(buf, &T, sizeof(T));
       n_anchors++;
-
      A->prev->next= A->next;
      A->next->prev= A->prev;
   }
   buffer_free(buf, (void**) &anchors, NULL);
   if (n_anchors)
      qsort(anchors, n_anchors, sizeof(anchors[0]), anchor_compare);
-
   for(i=0;i<n_anchors-1;i++)
     if (!strcmp(anchors[i].name,anchors[i+1].name))
-       exit(fprintf(stderr,"multiple definition of anchor %s:\n" 
+       exit(fprintf(stderr,"multiple definition of anchor %s:\n"
                            " 1- near %s: %d\n",
                            " 2- near %s: %d\n",
-                              anchors[i].name, 
+                              anchors[i].name,
                          anchors[i].fname, anchors[i].lno,
                          anchors[i+1].fname, anchors[i+1].lno));
 }
-
 int anchor_compare(const void *a, const void *b)
 {
   const aanchor_t *A= a;
   const aanchor_t *B= b;
   return strcmp(A->name, B->name);
 }
-
 void print_anchors()
 {
   int i;
@@ -3336,33 +3150,30 @@ void print_anchors()
   printf("static const anchor_t anchors[]= {\n");
   for(i=0;i<n_anchors;i++)
   {
-     printf("{ "); print_str(anchors[i].name); 
+     printf("{ "); print_str(anchors[i].name);
                    printf(", %d },\n", anchors[i].secnum);
   }
   printf("};\n");
 }
-
-
 void parse_anchor()
 {
   int i;
   char *ach;
   docnode_t *N;
   remove_leading_spc(line);
-  if (line[0]!='[') 
+  if (line[0]!='[')
      exit(fprintf(stderr, "internal error at parse_anchor :1\n"));
   remove_part(line,0,1);
   remove_leading_spc(line);
   ach= "anchor";
-  if (!strpfx(ach, line)) 
+  if (!strpfx(ach, line))
      exit(fprintf(stderr, "internal error at parse_anchor :2\n"));
   remove_part(line, 0, strlen(ach));
   if (!skipspc(line,0))
      exit(fprintf(stderr, "internal error at parse_anchor :3\n"));
   remove_leading_spc(line);
   for(i=0;line[i] && line[i]!=']';i++) ;
-     
-  if (!line[i]) 
+  if (!line[i])
      exit(fprintf(stderr, "near %s: %d: unterminated anchor directive\n",
                            file_name, line_number));
   N= calloc(1,sizeof(*N));
@@ -3370,8 +3181,6 @@ void parse_anchor()
   N->a_txt= get_part(line, 0,i);
   add_node(N);
 }
-
-
 void output_link(elt_t *linkel,docnode_t *ref)
 {
   elt_t *E,*elts;
@@ -3382,44 +3191,36 @@ void output_link(elt_t *linkel,docnode_t *ref)
   char *arg;
   char *K,*L,*tgt;
   buffer_t *B;
-
   K= strstr(linkel->arg, "%{");
   if (!K) K= strstr(linkel->arg,"%(");
-  if (!K) 
+  if (!K)
      exit(fprintf(stderr,"link contains no target near %s:%d\n",
                         ref->fname, ref->lno));
-
   if (K[1]=='{') q='}'; else q=')';
   for(L=K+2;L[0];L++)
     if (L[0]==q) break;
-
   if (!L[0])
      exit(fprintf(stderr,"unterminated link target near %s:%d\n",
                         ref->fname, ref->lno));
-
   tgt= get_part(linkel->arg, K+2-linkel->arg, L-linkel->arg);
   remove_all_spaces(tgt);
   if (!tgt[0])
      exit(fprintf(stderr,"empty link target near %s:%d\n",
                         ref->fname, ref->lno));
-
   A= find_target(tgt);
   if (!A)
      exit(fprintf(stderr,"can't find link target %s near %s:%d\n",
                         tgt, ref->fname, ref->lno));
-
   B= buffer_new(128);
   buffer_write(B, linkel->arg, K-linkel->arg);
   if (q!='}')
     buffer_write(B, A->node->s_title, strlen(A->node->s_title));
   buffer_write(B, L+1, strlen(L+1)+1);
   buffer_free(B, (void**) &arg, NULL);
-
   elts= parse_seq(arg, 0);
-  if (elts->next==elts) 
+  if (elts->next==elts)
      exit(fprintf(stderr,"empty link text near %s:%d\n",
                            ref->fname, ref->lno));
-
   inline_style("link", &style, &font);
   start= seqlen;
   for(E=elts->next;E!=elts;E=E->next)
@@ -3428,8 +3229,6 @@ void output_link(elt_t *linkel,docnode_t *ref)
   record_decor(style, start, end);
   record_link(start, end, A->secnum);
 }
-
-
 void record_link(int start, int end, int num)
 {
   if (!linkbuf) linkbuf= buffer_new(128);
@@ -3438,7 +3237,6 @@ void record_link(int start, int end, int num)
   buffer_write(linkbuf, &num, sizeof(num));
   n_links++;
 }
-
 void print_links()
 {
   unsigned int *L;
@@ -3453,15 +3251,13 @@ void print_links()
   n_links= 0;
   linkbuf= NULL;
 }
-
-
 aanchor_t *find_target(char *tgt)
 {
   int i,j,k,R;
   i= 0; j= n_anchors-1;
   while(i<=j)
   {
-     k= (i+j)/2; 
+     k= (i+j)/2;
      R= strcmp(anchors[k].name, tgt);
      if (R<0) i= k+1;
      else if (R>0) j= k-1;
@@ -3469,23 +3265,19 @@ aanchor_t *find_target(char *tgt)
   }
   return NULL;
 }
-
-
 void output_toc(int level)
 {
   docnode_t *N;
   int font, style;
   int start;
   elt_t *E;
-
   page_init();
   inline_style("link", &style, &font);
-
   for(N=doc->next;N!=doc;N=N->next)
   {
     if (N->kind!='S' || N->level<=level) continue;
     start= seqlen;
-    output_elt(0,0); 
+    output_elt(0,0);
     for(E=N->elts->next;E!=N->elts;E=E->next)
     {
       output_elt(style, lookup_word(font, E->txt));
@@ -3495,31 +3287,23 @@ void output_toc(int level)
     coprint("  canvas->bullet_println(%d, %d, %d);\n",
                    4-N->level+1, start, seqlen-1);
   }
-
   printf("static void tf_toc%d(FYGfxCanvas* canvas) {\n",level);
   print_table_coord_variables();
   printf("canvas->reset_doc();\n");
-
   print_command_buffer();
-
   printf(" canvas->end_doc(tf_toc%d);\n",level);
   printf("}\n");
-
   printf("static void cf_toc%d(FYHelpWin *win) {\n",level);
   printf("  FYGfxCanvas *canvas= win->canvas;\n");
-
   print_seq_buffer();
-
   print_bgrects();
   print_imagedefs();
   print_links();
-
   printf("  static const sipair_t empty[]= { { NULL, 0 } };\n");
   printf("  win->set_section_menu(empty);\n");
   printf("  tf_toc%d(canvas);\n",level);
   printf("}\n");
 }
-
 int lookup_word(int font, const char *str)
 {
    word_record_t *V;
@@ -3547,14 +3331,11 @@ int lookup_word(int font, const char *str)
    V->n_val+= 2;
    return N[nv+1];
 }
-
-
 char **get_word_list()
 {
    char **R;
-   word_record_t *W;  
+   word_record_t *W;
    int i;
-  
    R= malloc((last_word+2)*sizeof(char*));
    R[0]= "";
    while((W=strmap_destroy(&word_list)))
@@ -3566,10 +3347,6 @@ char **get_word_list()
    R[last_word+1]= NULL;
    return R;
 }
-
-
-
-
 static void usage(char **argv)
 {
    exit(fprintf(stderr,"usage: %s [-h"
@@ -3579,7 +3356,6 @@ static void usage(char **argv)
       "|-f filename] input1 input2 .. \n",
                         argv[0]));
 }
-
 static void shorthelp(char **argv)
 {
   fprintf(stderr,"%s usage: \n", argv[0]);
@@ -3592,7 +3368,6 @@ static void shorthelp(char **argv)
                  "                 compiles the given list of files  to stdout\n", argv[0]);
   exit(1);
 }
-
 static void shift(int *argc, char** argv)
 {
   int i;
@@ -3600,7 +3375,6 @@ static void shift(int *argc, char** argv)
   argv[i]= NULL;
   (*argc)--;
 }
-
 static void write_header(char *fname)
 {
   FILE *f;
@@ -3611,23 +3385,20 @@ static void write_header(char *fname)
   fprintf(f,"void help(const char *anchor);\n");
   fclose(f);
 }
-
 #ifdef SELFHELP
 extern void show_help();
 #endif
-
 int main(int argc,char **argv)
 {
   int ninput;
   if (argc<2)
     usage(argv);
-
   ninput= 0;
   while(argc>1)
   {
     if (!strcmp(argv[1], "-h")) shorthelp(argv);
 #ifdef SELFHELP
-    if (!strcmp(argv[1], "-H")) show_help(); 
+    if (!strcmp(argv[1], "-H")) show_help();
 #endif
     if (!strcmp(argv[1],"-f"))
     {
@@ -3635,25 +3406,20 @@ int main(int argc,char **argv)
       if (argc<2) usage(argv);
       write_header(argv[1]);
       shift(&argc,argv);
-      continue; 
+      continue;
     }
     if (argv[1][0]=='-') usage(argv);
     parse_file(argv[1]);
     shift(&argc,argv);
     ninput++;
   }
-
   if (!ninput) return 0;
-
-
 //  parse_file(argv[1]);
 //  print_docnodelist(doc);
   puts(libhdr); puts(libcode);
-
   calculate_section_titles();
   collect_anchors();
   print_anchors();
-  
   check_first_node();
   get_chapter_menu();
   printf(
@@ -3662,9 +3428,7 @@ int main(int argc,char **argv)
 "  %s\n"
 "  win->canvas->link_func= follow_link;\n"
 "}\n"
-
 ,chapter_menu);
-
   print_section_menu_arrays();
   output_doc();
   output_toc(2);
@@ -3736,7 +3500,491 @@ puts(
 "  cf_0(help_window);\n"
 "}\n"
 "\n"
-
   );
   return 0;
 }
+/* END FILE ../build/t-parse.c */
+/* BEGIN FILE ../imports/buffer.c */
+/* CONTINUE FILE ../imports/buffer.c */
+struct buffer_node {
+  struct buffer_node *next;
+  size_t len;
+  unsigned char data[1];
+};
+struct buffer {
+  struct buffer_node *first, *last;
+  size_t blksize;
+};
+_BUFFER_PROTO buffer_t *buffer_new(size_t blksize)
+{
+  buffer_t *B;
+  B= malloc(sizeof(*B));
+  B->first= B->last= NULL;
+  B->blksize= blksize;
+  return B;
+}
+_BUFFER_PROTO void buffer_free(buffer_t *B, void **Rd, size_t *Rl)
+{
+  struct buffer_node *P,*N;
+  if (Rd || Rl) buffer_collect(B, Rd, Rl);
+  for(P=B->first;P;P=N)
+  {
+    N= P->next;
+    free(P);
+  }
+  free(B);
+}
+_BUFFER_PROTO void buffer_collect(buffer_t *B, void **Rd, size_t *Rl)
+{
+  size_t S;
+  struct buffer_node *P;
+  unsigned char *R;
+  if (!Rd && !Rl) return ;
+  S= 0;
+  for(P=B->first;P;P=P->next) S+= P->len;
+  if (S==0) { if (Rd) *Rd= NULL; if (Rl) *Rl= 0; return ; }
+  if (!Rd) { *Rl= S; return ; }
+  R= malloc(S);
+  S= 0;
+  for(P=B->first;P;P=P->next)
+  {
+    memcpy(R+S, P->data, P->len);
+    S+= P->len;
+  }
+  *Rd= (void*) R;
+  if (Rl) *Rl= S;
+}
+_BUFFER_PROTO void buffer_write(buffer_t *B, void *d, size_t l)
+{
+  struct buffer_node *P;
+  size_t cp, spc;
+  while(l)
+  {
+    if (!B->last || B->last->len==B->blksize)
+    {
+      P= malloc(sizeof(*P)+B->blksize-1);
+      P->len= 0;
+      P->next= NULL;
+      if (!B->last) { B->last= B->first= P; }
+      else { B->last->next= P; B->last= P; }
+    }
+    spc= B->blksize - B->last->len;
+    if (spc>l) cp= l; else cp= spc;
+    memcpy(B->last->data+B->last->len, d, cp);
+    B->last->len+= cp;
+    l-= cp;
+    d= (unsigned char*) d + cp;
+  }
+}
+/* END FILE ../imports/buffer.c */
+/* BEGIN FILE ../imports/critbit.c */
+#include <sys/types.h>
+/* CONTINUE FILE ../imports/critbit.c */
+typedef struct
+{
+  void* child[2];
+  unsigned internal:1, byte:23, mask:8;
+} strmap_node_t;
+static inline int strmap_dir
+    (uint8_t *key,uint32_t len_key,strmap_node_t *node)
+{
+  uint8_t c;
+  if (node->byte<len_key) c= key[node->byte];
+                     else c= 0;
+  return (1+(node->mask|c))>>8;
+}
+void* strmap_find(strmap_t *map,char *skey)
+{
+  uint8_t *key; unsigned int len_key;
+  strmap_node_t *node;
+  node= map->root;
+  if (!node) return 0;
+  key= (void*) skey;
+  len_key= strlen(skey);
+  while(node->internal)
+     node= node->child[strmap_dir(key,len_key,node)];
+  if (strcmp(skey, node->child[0])) return 0;
+                               else return node->child[1];
+}
+static inline uint32_t strmap_make_mask
+    (uint32_t A, uint32_t B)
+{
+  uint8_t diff;
+  diff= A ^ B;
+  diff|= diff>>1;
+  diff|= diff>>2;
+  diff|= diff>>4;
+  return (diff&~(diff>>1))^255;
+}
+static inline strmap_node_t* strmap_leaf_node
+    (uint8_t *key, void *data)
+{
+  strmap_node_t *N;
+  N= malloc(sizeof(*N));
+  N->internal= 0;
+  N->child[0]= key;
+  N->child[1]= data;
+  return N;
+}
+static inline strmap_node_t* strmap_internal_node
+    (uint32_t byte, uint32_t mask)
+{
+  strmap_node_t *N;
+  N= malloc(sizeof(*N));
+  N->internal= 1;
+  N->byte= byte;
+  N->mask= mask;
+  return N;
+}
+void* strmap_insert(strmap_t* map, char* skey, void *data)
+{
+  uint8_t *key; uint32_t len_key;
+  strmap_node_t *node_elt;
+  key= (void*) skey;
+  if (!map->root)
+  {
+     map->root= strmap_leaf_node(key,data);
+     return 0;
+  }
+  len_key= strlen(skey);
+  node_elt= map->root;
+  while(node_elt->internal)
+    node_elt= node_elt->child[strmap_dir(key,len_key,node_elt)];
+  uint32_t crit_byte;
+  uint8_t  mask;
+  uint8_t  *elt;
+  int dir_elt;
+  strmap_node_t *node_key;
+  elt= node_elt->child[0];
+  for(crit_byte=0;
+      crit_byte<=len_key && elt[crit_byte]==key[crit_byte];
+      crit_byte++)
+          ;
+  if (crit_byte>len_key) return node_elt->child[1];
+  mask= strmap_make_mask(elt[crit_byte],key[crit_byte]);
+  dir_elt= (1+(mask|elt[crit_byte]))>>8;
+  node_key= strmap_internal_node(crit_byte,mask);
+  node_key->child[1-dir_elt]= strmap_leaf_node(key,data);
+  strmap_node_t *parent;
+  strmap_node_t *node;
+  parent= 0;
+  node= map->root;
+  while(node->internal)
+  {
+     if (node->byte > crit_byte) break;
+     if (node->byte==crit_byte && node->mask > mask) break;
+     parent= node;
+     node= node->child[strmap_dir(key,len_key,node)];
+  }
+  node_key->child[dir_elt]= node;
+  if (parent) { if (parent->child[0]==node) parent->child[0]= node_key;
+                                    else    parent->child[1]= node_key; }
+  else map->root= node_key;
+  return 0;
+}
+void *strmap_remove(strmap_t* map, char *skey)
+{
+  uint8_t *key; uint32_t len_key;
+  void *retv;
+  if (!map->root) return 0;
+  key= (void*) skey;
+  len_key= strlen(skey);
+  strmap_node_t *node;
+  strmap_node_t *sibling;
+  strmap_node_t *parent;
+  strmap_node_t *gparent;
+  node= map->root;
+  gparent= 0;
+  sibling= 0;
+  parent= 0;
+  while(node->internal)
+  {
+    int dir;
+    dir= strmap_dir(key, len_key, node);
+    gparent= parent;
+    parent= node;
+    sibling= node->child[1-dir];
+    node= node->child[dir];
+  }
+  if (strcmp(node->child[0],skey)) return 0;
+  retv= node->child[1];
+  free(node);
+  if (!gparent)
+  {
+     map->root= sibling;
+     if (parent) free(parent);
+     return retv;
+  }
+  if (gparent->child[0]==parent)
+    gparent->child[0]= sibling;
+  else
+    gparent->child[1]= sibling;
+  free(parent);
+  return retv;
+}
+void *strmap_destroy(strmap_t *map)
+{
+  strmap_node_t *node;
+  strmap_node_t *parent;
+  strmap_node_t *gparent;
+  strmap_node_t *sibling;
+  void *retv;
+  if (!map->root) return 0;
+  parent= 0;
+  gparent= 0;
+  sibling= 0;
+  node= map->root;
+  while(node->internal)
+  {
+    gparent= parent;
+    parent= node;
+    sibling= node->child[1];
+    node= node->child[0];
+  }
+  retv= node->child[1];
+  free(node);
+  if (!gparent)
+  {
+    map->root= sibling;
+    if (parent) free(parent);
+    return retv;
+  }
+  if (gparent->child[0]==parent)
+    gparent->child[0]= sibling;
+  else
+    gparent->child[1]= sibling;
+  free(parent);
+  return retv;
+}
+strmap_t  *strmap_new()
+{
+  strmap_t *s;
+  s= malloc(sizeof(*s));
+  s->root= 0;
+  return s;
+}
+/* END FILE ../imports/critbit.c */
+/* BEGIN FILE ../src/ifile.c */
+/* CONTINUE FILE ../src/ifile.c */
+#define IFILE_BLOCK_SIZE 128
+typedef struct ifileblock {
+  uint8_t data[IFILE_BLOCK_SIZE];
+  size_t len;
+  struct ifileblock *next;
+} ifileblock_t;
+struct ifile {
+  FILE *handle;
+  ifileblock_t *blocks,*last;
+  int eof, lineno;
+  char *name, *error;
+};
+int ifile_open(ifile_t **Rf,char *name)
+{
+  ifile_t *f;
+  char buf[2000];
+  int R;
+  R= 0;
+  f= malloc(sizeof(*f));
+  f->handle= fopen(name, "r");
+  if (f->handle)
+  {
+     f->error= NULL;
+     f->eof= 0;
+  } else {
+     snprintf(buf, sizeof(buf), "can't open %s: %s",name, strerror(errno));
+     f->error= strdup(buf);
+     R= 1;
+     f->eof= 1;
+  }
+  f->lineno= 0;
+  f->name= strdup(name);
+  f->blocks= f->last= NULL;
+  *Rf= f;
+  return R;
+}
+static int ifile_read_block(ifile_t *f)
+{
+  ifileblock_t *B;
+  size_t R;
+  if (f->eof) return 1;
+  B= malloc(sizeof(*B));
+  R= fread(B->data, 1, sizeof(B->data), f->handle);
+  if (R<sizeof(B->data))
+  {
+     if (R==0) free(B);
+     f->eof= 1;
+     if (ferror(f->handle))
+     {
+       char buf[2000];
+       snprintf(buf,sizeof(buf), "read error from %s: %s",
+                          f->name, strerror(errno));
+       f->error= strdup(buf);
+     }
+     if (R==0) return 1;
+  }
+  B->len= R;
+  B->next= NULL;
+  if (!f->blocks) { f->blocks= f->last= B; }
+  else { f->last->next= B; f->last= B; }
+  return 0;
+}
+static void ifile_collect_blocks
+    (ifile_t *f, ifileblock_t *E,size_t endi,
+     uint8_t **Rbuffer, size_t *Rlen, int nullterm)
+{
+   ifileblock_t *B,*N;
+   uint8_t *buffer;
+   size_t size;
+   size= 0;
+   if (endi==E->len-1) { E=NULL; endi= -1; }
+   for(B=f->blocks;B!=E;B=B->next) size+= B->len;
+   size+= endi+1;
+   *Rlen= size;
+   buffer= malloc(size + nullterm);
+   size= 0;
+   for(B=f->blocks;B!=E;B=N)
+   {
+     N= B->next;
+     memcpy(buffer+size, B->data, B->len);
+     size+= B->len;
+     free(B);
+   }
+   if (E) {
+     memcpy(buffer+size, E->data, endi+1);
+     memmove(E->data, E->data+endi+1, E->len-endi-1);
+     E->len-= endi+1;
+     size+= endi+1;
+   }
+   f->blocks= E;
+   *Rbuffer= buffer;
+   if (nullterm) { int i; for(i=0;i<nullterm;i++) buffer[size+i]= 0; }
+}
+int ifile_get_line(ifile_t *f,uint8_t **buffer, size_t *len,int nullterm)
+{
+  ifileblock_t *L;
+  int i;
+  if (!f->blocks && ifile_read_block(f)) return 1;
+again:
+  i= 0;
+  L= f->last;
+next:
+  if (i==L->len)
+  {
+    if (ifile_read_block(f)) goto done;
+    goto again;
+  }
+  if (L->data[i]=='\n') goto done;
+  if (L->data[i]=='\r')
+  {
+     if (i==L->len-1) {
+        if (ifile_read_block(f)) goto done;
+        if (L->next->data[0]=='\n') { i= 0; L= L->next; }
+     } else {
+        if (L->data[i+1]=='\n') i++;
+     }
+     goto done;
+  }
+  i++;
+  goto next;
+done:
+  ifile_collect_blocks(f, L,i, buffer, len,nullterm);
+  f->lineno++;
+  return 0;
+}
+void ifile_close(ifile_t *f)
+{
+   ifileblock_t *B,*N;
+   if (f->handle) fclose(f->handle);
+   for(B=f->blocks;B;B=N) { N= B->next; free(B); }
+   if (f->error) free(f->error);
+   free(f->name);
+   free(f);
+}
+int ifile_line_number(ifile_t *f) { return f->lineno; }
+char *ifile_error(ifile_t *f) { return f->error; }
+char *ifile_file_name(ifile_t *f) { return f->name; }
+/* END FILE ../src/ifile.c */
+/* BEGIN FILE ../src/pngdim.c */
+#include <png.h>
+/* CONTINUE FILE ../src/pngdim.c */
+#define SIG_BYTES 8
+char *get_png_dimensions (const char *fn, unsigned int *Rw, unsigned int *Rh)
+{
+  FILE *fp;
+  unsigned char header[SIG_BYTES];
+  png_structp png_ptr;
+  png_infop info_ptr;
+  png_infop end_info;
+  png_uint_32 ww, hh;
+  int bit_depth, color_type, interlace_type;
+  char ebuf[2000];
+  fp = fopen (fn, "rb");
+  if (!fp)
+  {
+    snprintf(ebuf,sizeof(ebuf)-1,"can not open file %s: %s",
+                                  fn, strerror (errno));
+    goto eret;
+  }
+  if (fread (header, 1, SIG_BYTES, fp) != SIG_BYTES)
+  {
+      snprintf(ebuf,sizeof(ebuf)-1,
+                "can not read signature bytes from file %s", fn);
+      goto err_ret_close;
+  }
+  if (png_sig_cmp (header, 0, SIG_BYTES))
+  {
+     snprintf(ebuf,sizeof(ebuf)-1, "file %s is not a PNG file.", fn);
+     goto err_ret_close;
+  }
+  png_ptr = png_create_read_struct (PNG_LIBPNG_VER_STRING, 0, 0, 0);
+  if (!png_ptr)
+  {
+     snprintf(ebuf,sizeof(ebuf)-1,
+              "internal error. libpng: can not allocate PNG struct.");
+     goto err_ret_close;
+  }
+  info_ptr = png_create_info_struct (png_ptr);
+  if (!info_ptr)
+  {
+    snprintf(ebuf,sizeof(ebuf)-1,
+               "internal error. libpng: can not allocate first info struct.");
+    goto err_ret_destroy0;
+  }
+  end_info = png_create_info_struct (png_ptr);
+  if (!end_info)
+  {
+    snprintf(ebuf,sizeof(ebuf)-1,
+ "internal error. libpng: can not allocate second info struct.");
+    goto err_ret_destroy1;
+  }
+  if (setjmp (png_jmpbuf (png_ptr)))
+  {
+    snprintf(ebuf,sizeof(ebuf)-1,
+              "internal error. libpng jumped back.");
+    goto err_ret_destroy2;
+  }
+  png_init_io (png_ptr, fp);
+  png_set_sig_bytes (png_ptr, SIG_BYTES);
+  png_read_info (png_ptr, info_ptr);
+  png_get_IHDR (png_ptr, info_ptr, &ww, &hh, &bit_depth, &color_type,
+  &interlace_type, NULL, NULL);
+  png_destroy_read_struct (&png_ptr, &info_ptr, &end_info);
+  fclose(fp);
+  *Rw= ww;
+  *Rh= hh;
+  return NULL;
+err_ret_destroy0:
+  png_destroy_read_struct (&png_ptr, 0, 0);
+  goto err_ret_close;
+err_ret_destroy1:
+  png_destroy_read_struct (&png_ptr, &info_ptr, 0);
+  goto err_ret_close;
+err_ret_destroy2:
+  png_destroy_read_struct (&png_ptr, &info_ptr, &end_info);
+err_ret_close:
+  fclose (fp);
+eret:
+  ebuf[sizeof(ebuf)-1]= 0;
+  return strdup(ebuf);
+}
+/* END FILE ../src/pngdim.c */
